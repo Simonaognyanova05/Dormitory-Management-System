@@ -6,7 +6,7 @@ This branch contains the OCR microservice work for the student dormitory managem
 
 ## Current Status
 
-The technology baseline is documented below, following the detailed OCR technical specification supplied for this task. Team-wide confirmation and updates to conflicting project documents are still pending. The service has not been implemented yet.
+The technology baseline is documented below, following the detailed OCR technical specification supplied for this task. A draft [API contract](OCR_API_CONTRACT.md) and [OpenAPI definition](openapi.json) are ready for review with the monolith developer. Team-wide confirmation and updates to conflicting project documents are still pending. The service has not been implemented yet.
 
 ## Technology Baseline
 
@@ -56,7 +56,7 @@ The project documents describe different technology options. For this OCR branch
 | --- | --- | --- |
 | OCR engine | The general project proposal lists Node.js and Tesseract. | Use a vision-capable GPT model for extraction, as described in the detailed OCR specification. Tesseract is not part of the initial implementation baseline. |
 | OCR API framework | The architecture document lists Python/FastAPI for the extraction microservice. | Use Node.js/Express for the OCR API and Python for preprocessing. FastAPI remains the main application's integration point. |
-| Request contract | The architecture document proposes multipart uploads; the detailed OCR specification proposes Base64 in JSON. | Agree on the final contract with the monolith developer in task 2 before implementing request handling. |
+| Request contract | The architecture document proposes multipart uploads; the detailed OCR specification proposes Base64 in JSON. | The [draft contract](OCR_API_CONTRACT.md) uses Base64 in JSON; confirm it with the monolith developer before implementing request handling. |
 
 These choices are recorded for development in this branch; they do not imply that the rest of the team has already approved changes to the shared architecture. The conflicting documents need to be aligned with the team.
 
@@ -79,4 +79,4 @@ These choices are recorded for development in this branch; they do not imply tha
 
 ## Next Step
 
-Confirm the technology baseline with the team, then agree on the request/response contract with the monolith developer using task 2 in [OCR_TASKS.md](OCR_TASKS.md).
+Review [OCR_API_CONTRACT.md](OCR_API_CONTRACT.md) with the monolith developer. Import [openapi.json](openapi.json) into Postman to inspect the proposed requests and responses. Record acceptance of the contract and technology baseline with the team, then define document profiles in task 3 of [OCR_TASKS.md](OCR_TASKS.md).

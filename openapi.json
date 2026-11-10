@@ -1,0 +1,270 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Dormitory OCR Microservice",
+    "version": "1.0.0-draft",
+    "description": "Proposed contract; implementation and monolith-developer acceptance are pending. See OCR_API_CONTRACT.md for behavioral rules."
+  },
+  "servers": [{"url": "http://localhost:3000", "description": "Local development (once implemented)"}],
+  "security": [{"ServiceToken": []}],
+  "paths": {
+    "/api/v1/ocr/process": {
+      "post": {
+        "operationId": "processDocument",
+        "summary": "Extract reviewable fields from one document",
+        "description": "Synchronous processing; 10 MiB decoded-file and 3 PDF-page limits are proposed. Complete and partial results both use HTTP 200. The monolith retains originals and manages jobs. Medical and unimplemented types are rejected before processing. Multipart uploads are not supported.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/ProcessRequest"},
+              "examples": {
+                "transportExample": {
+                  "summary": "Valid Base64 for a blank 1x1 PNG; replace with a readable document",
+                  "value": {
+                    "documentId": "test-doc-001",
+                    "documentType": "student_certificate",
+                    "file": {
+                      "mimeType": "image/png",
+                      "contentBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Extraction completed or returned a useful partial result; human confirmation remains necessary.",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ProcessResponse"},
+                "examples": {
+                  "completeCertificate": {
+                    "summary": "Complete synthetic certificate result",
+                    "value": {
+                      "documentId": "test-doc-001",
+                      "documentType": "student_certificate",
+                      "detectedDocumentType": "student_certificate",
+                      "status": "completed",
+                      "fields": {"fullName": "Ivan Petrov Ivanov", "facultyNumber": "001234567", "specialty": "Computer Systems and Technologies", "yearOfStudy": 2},
+                      "fieldIssues": [], "warnings": [], "requiresManualReview": false
+                    }
+                  },
+                  "partialCertificate": {
+                    "summary": "A missing field requires manual attention",
+                    "value": {
+                      "documentId": "test-doc-001",
+                      "documentType": "student_certificate",
+                      "detectedDocumentType": "student_certificate",
+                      "status": "partial",
+                      "fields": {"fullName": "Ivan Petrov Ivanov", "facultyNumber": "001234567", "specialty": null, "yearOfStudy": 2},
+                      "fieldIssues": [{"field": "specialty", "code": "missing", "message": "Specialty was not found. Enter it manually."}],
+                      "warnings": [], "requiresManualReview": true
+                    }
+                  },
+                  "completePlacementOrder": {
+                    "summary": "Placement identifiers retain leading zeros and separators",
+                    "value": {
+                      "documentId": "order-001", "documentType": "placement_order", "detectedDocumentType": "placement_order", "status": "completed",
+                      "fields": {"orderNumber": "RD-001", "orderDate": "2026-11-03", "dormitory": "1", "room": "012"},
+                      "fieldIssues": [], "warnings": [], "requiresManualReview": false
+                    }
+                  },
+                  "typeMismatch": {
+                    "summary": "Return requested profile with a warning instead of silently changing it",
+                    "value": {
+                      "documentId": "test-doc-002", "documentType": "placement_form", "detectedDocumentType": "address_registration", "status": "partial",
+                      "fields": {"fullName": null, "phone": null, "permanentAddress": "Example Street 1"},
+                      "fieldIssues": [
+                        {"field": "fullName", "code": "missing", "message": "Full name was not found."},
+                        {"field": "phone", "code": "missing", "message": "Phone number was not found."}
+                      ],
+                      "warnings": ["document_type_mismatch"], "requiresManualReview": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "413": {"$ref": "#/components/responses/TooLarge"},
+          "415": {"$ref": "#/components/responses/UnsupportedMedia"},
+          "422": {"$ref": "#/components/responses/UnprocessableDocument"},
+          "500": {"$ref": "#/components/responses/InternalError"},
+          "502": {"$ref": "#/components/responses/ProviderError"},
+          "503": {"$ref": "#/components/responses/Unavailable"},
+          "504": {"$ref": "#/components/responses/Timeout"}
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "Check process liveness without calling AI",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Process is running; this does not test AI/Python readiness.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object", "additionalProperties": false, "required": ["status", "service"],
+                  "properties": {"status": {"const": "ok"}, "service": {"const": "dormitory-ocr"}}
+                },
+                "example": {"status": "ok", "service": "dormitory-ocr"}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ServiceToken": {"type": "apiKey", "in": "header", "name": "X-Service-Token", "description": "Internal shared token; never expose it to the browser."}
+    },
+    "schemas": {
+      "DocumentId": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$", "description": "Opaque identifier; UUID is allowed but not required."},
+      "DocumentType": {"type": "string", "enum": ["student_certificate", "placement_order", "placement_form", "address_registration"]},
+      "ProcessRequest": {
+        "type": "object", "additionalProperties": false, "required": ["documentId", "documentType", "file"],
+        "properties": {
+          "documentId": {"$ref": "#/components/schemas/DocumentId"},
+          "documentType": {"$ref": "#/components/schemas/DocumentType"},
+          "file": {
+            "type": "object", "additionalProperties": false, "required": ["mimeType", "contentBase64"],
+            "properties": {
+              "mimeType": {"type": "string", "enum": ["application/pdf", "image/jpeg", "image/png"]},
+              "contentBase64": {
+                "type": "string", "format": "byte", "minLength": 4, "maxLength": 13981016,
+                "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+                "description": "Canonical padded Base64 without whitespace/data URL prefix; validate canonical encoding, decoded bytes and size at runtime."
+              }
+            }
+          }
+        }
+      },
+      "NullableText": {"type": ["string", "null"], "minLength": 1, "description": "Preserve original language and leading zeros; null requires a field issue."},
+      "CertificateFields": {
+        "type": "object", "additionalProperties": false, "required": ["fullName", "facultyNumber", "specialty", "yearOfStudy"],
+        "properties": {
+          "fullName": {"$ref": "#/components/schemas/NullableText"},
+          "facultyNumber": {"$ref": "#/components/schemas/NullableText"},
+          "specialty": {"$ref": "#/components/schemas/NullableText"},
+          "yearOfStudy": {"type": ["integer", "null"], "description": "Validate the agreed study-year range at runtime; invalid candidates require an issue."}
+        }
+      },
+      "PlacementOrderFields": {
+        "type": "object", "additionalProperties": false, "required": ["orderNumber", "orderDate", "dormitory", "room"],
+        "properties": {
+          "orderNumber": {"$ref": "#/components/schemas/NullableText"},
+          "orderDate": {"$ref": "#/components/schemas/NullableText", "description": "YYYY-MM-DD when valid; an invalid candidate requires a field issue."},
+          "dormitory": {"$ref": "#/components/schemas/NullableText"},
+          "room": {"$ref": "#/components/schemas/NullableText"}
+        }
+      },
+      "PlacementFormFields": {
+        "type": "object", "additionalProperties": false, "required": ["fullName", "phone", "permanentAddress"],
+        "properties": {
+          "fullName": {"$ref": "#/components/schemas/NullableText"},
+          "phone": {"$ref": "#/components/schemas/NullableText"},
+          "permanentAddress": {"$ref": "#/components/schemas/NullableText"}
+        }
+      },
+      "AddressRegistrationFields": {
+        "type": "object", "additionalProperties": false, "required": ["city", "addressLine"],
+        "properties": {"city": {"$ref": "#/components/schemas/NullableText"}, "addressLine": {"$ref": "#/components/schemas/NullableText"}}
+      },
+      "FieldIssue": {
+        "type": "object", "additionalProperties": false, "required": ["field", "code", "message"],
+        "properties": {
+          "field": {"type": "string", "enum": ["fullName", "facultyNumber", "specialty", "yearOfStudy", "orderNumber", "orderDate", "dormitory", "room", "phone", "permanentAddress", "city", "addressLine"], "description": "Must belong to the requested document profile."},
+          "code": {"type": "string", "enum": ["missing", "invalid_format", "uncertain"]},
+          "message": {"type": "string", "minLength": 1}
+        }
+      },
+      "ProcessResponse": {
+        "type": "object", "additionalProperties": false,
+        "required": ["documentId", "documentType", "detectedDocumentType", "status", "fields", "fieldIssues", "warnings", "requiresManualReview"],
+        "properties": {
+          "documentId": {"$ref": "#/components/schemas/DocumentId"},
+          "documentType": {"$ref": "#/components/schemas/DocumentType"},
+          "detectedDocumentType": {"type": "string", "enum": ["student_certificate", "placement_order", "placement_form", "address_registration", "unknown"], "description": "A medical detection is returned as an error, never as a successful extraction."},
+          "status": {"type": "string", "enum": ["completed", "partial"]},
+          "fields": {"type": "object"},
+          "fieldIssues": {"type": "array", "items": {"$ref": "#/components/schemas/FieldIssue"}},
+          "warnings": {"type": "array", "uniqueItems": true, "items": {"type": "string", "enum": ["document_type_mismatch"]}},
+          "requiresManualReview": {"type": "boolean", "description": "Additional attention flag; false does not waive human confirmation."}
+        },
+        "oneOf": [
+          {"properties": {"documentType": {"const": "student_certificate"}, "fields": {"$ref": "#/components/schemas/CertificateFields"}}},
+          {"properties": {"documentType": {"const": "placement_order"}, "fields": {"$ref": "#/components/schemas/PlacementOrderFields"}}},
+          {"properties": {"documentType": {"const": "placement_form"}, "fields": {"$ref": "#/components/schemas/PlacementFormFields"}}},
+          {"properties": {"documentType": {"const": "address_registration"}, "fields": {"$ref": "#/components/schemas/AddressRegistrationFields"}}}
+        ],
+        "allOf": [
+          {
+            "if": {"properties": {"status": {"const": "completed"}}},
+            "then": {"properties": {"requiresManualReview": {"const": false}, "fieldIssues": {"maxItems": 0}, "warnings": {"maxItems": 0}}},
+            "else": {"properties": {"requiresManualReview": {"const": true}}, "anyOf": [{"properties": {"fieldIssues": {"minItems": 1}}}, {"properties": {"warnings": {"minItems": 1}}}]}
+          }
+        ]
+      },
+      "Error": {
+        "type": "object", "additionalProperties": false, "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object", "additionalProperties": false, "required": ["code", "message", "retryable", "details"],
+            "properties": {
+              "code": {"type": "string", "enum": ["invalid_json", "invalid_request", "invalid_base64", "unauthorized", "payload_too_large", "file_too_large", "page_limit_exceeded", "unsupported_media_type", "unsupported_file", "unsupported_document_type", "unreadable_document", "internal_error", "provider_bad_response", "provider_request_rejected", "provider_unavailable", "service_not_configured", "provider_configuration_error", "processing_not_configured", "processing_timeout", "provider_timeout"]},
+              "message": {"type": "string", "minLength": 1},
+              "retryable": {"type": "boolean"},
+              "details": {"type": "object", "additionalProperties": true, "description": "Safe field-level metadata only; never echo file content or secrets."}
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "invalid_json, invalid_request or invalid_base64; not retryable.",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "invalid_base64", "message": "File content must be valid Base64.", "retryable": false, "details": {"field": "file.contentBase64"}}}}}
+      },
+      "Unauthorized": {
+        "description": "unauthorized: missing or incorrect service token; not retryable.",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "unauthorized", "message": "A valid service token is required.", "retryable": false, "details": {}}}}}
+      },
+      "TooLarge": {
+        "description": "payload_too_large, file_too_large or page_limit_exceeded; not retryable.",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "file_too_large", "message": "Decoded file exceeds 10 MiB.", "retryable": false, "details": {"maxBytes": 10485760}}}}}
+      },
+      "UnsupportedMedia": {
+        "description": "unsupported_media_type or unsupported_file, including MIME/signature mismatch; not retryable.",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "unsupported_file", "message": "File contents do not match the declared MIME type.", "retryable": false, "details": {}}}}}
+      },
+      "UnprocessableDocument": {
+        "description": "unsupported_document_type (including medical or unimplemented types) or unreadable_document; not retryable.",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "unsupported_document_type", "message": "This document type cannot be processed.", "retryable": false, "details": {"field": "documentType"}}}}}
+      },
+      "InternalError": {
+        "description": "internal_error; investigate instead of blindly retrying.",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "internal_error", "message": "An internal processing error occurred.", "retryable": false, "details": {}}}}}
+      },
+      "ProviderError": {
+        "description": "provider_bad_response is retryable; provider_request_rejected is not.",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "provider_bad_response", "message": "AI returned an invalid extraction response.", "retryable": true, "details": {}}}}}
+      },
+      "Unavailable": {
+        "description": "provider_unavailable is retryable; service_not_configured, provider_configuration_error and processing_not_configured are not.",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "provider_unavailable", "message": "The AI provider is temporarily unavailable.", "retryable": true, "details": {}}}}}
+      },
+      "Timeout": {
+        "description": "processing_timeout or provider_timeout; retryable within the monolith's bounded retry policy.",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "processing_timeout", "message": "The processing deadline was exceeded.", "retryable": true, "details": {}}}}}
+      }
+    }
+  }
+}

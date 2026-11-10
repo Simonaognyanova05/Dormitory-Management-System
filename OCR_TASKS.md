@@ -37,12 +37,15 @@ My service receives a document from the monolith, prepares it, extracts its fiel
 ### 2. Agree on the API with the Monolith Developer
 
 - [ ] Confirm `POST /api/v1/ocr/process` and JSON with Base64, as proposed in the OCR specification. Resolve the difference with the multipart contract in the architecture document.
-- [ ] Describe the input fields: `documentId`, `documentType`, `file.mimeType`, and `file.contentBase64`.
-- [ ] Clarify the accepted `documentId` format; do not require UUIDs without agreement.
-- [ ] Describe the output: `documentId`, `status`, `fields`, and `requiresManualReview`, including how individual fields requiring review are identified.
-- [ ] Agree on consistent document type and field names. For example, do not mix `student_certificate`/`student_status_certificate` or `fullName`/`full_name`.
-- [ ] Agree on the error format, HTTP status codes, and which errors are retryable.
-- [ ] Confirm file size and page limits. **10 MB and 3 pages for processable document types are proposals from the architecture document.**
+- [x] Describe the input fields: `documentId`, `documentType`, `file.mimeType`, and `file.contentBase64`.
+- [x] Specify a proposed `documentId` format that accepts opaque strings, including `doc-123` and UUIDs.
+- [x] Describe the output: `documentId`, `status`, `fields`, and `requiresManualReview`, including how individual fields requiring review are identified.
+- [x] Propose consistent document type and field names, with explicit mapping from the architecture's names.
+- [x] Document the proposed error format, HTTP status codes, and retryable errors.
+- [x] Document proposed file size and page limits. **10 MiB and 3 pages still need confirmation with the monolith developer.**
+- [ ] Obtain the monolith developer's acceptance of identifiers, naming, responses, errors, limits, and time budgets.
+
+**Deliverables:** [OCR_API_CONTRACT.md](OCR_API_CONTRACT.md) and [openapi.json](openapi.json). Contract design is documented; team acceptance remains pending. The OpenAPI file can be imported into Postman, but the server is not implemented yet.
 
 **Done when:** both sides accept examples of a request, a successful response, a partial result, and an error.
 
