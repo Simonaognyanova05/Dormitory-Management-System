@@ -28,7 +28,9 @@ My service receives a document from the monolith, prepares it, extracts its fiel
 
 - [ ] Agree with the team on **Node.js + Express**, **Python + PyMuPDF/OpenCV/Pillow**, and **GPT Vision**, as described in the detailed OCR specification.
 - [ ] Resolve the differences with the general project proposal, which lists Tesseract, and the architecture `.docx`, which lists FastAPI for the OCR service.
-- [ ] Document the confirmed choice in the microservice README.
+- [x] Document the technology baseline and pending team confirmation in the microservice [README](README.md).
+
+**Current baseline:** Node.js/Express + Python preprocessing + a vision-capable GPT model. The README records the differences between the source documents. Team-wide confirmation is still pending, so the first two items remain open.
 
 **Done when:** there is one agreed technology stack for implementation.
 
