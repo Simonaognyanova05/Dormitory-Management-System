@@ -4,7 +4,7 @@
 **Status:** proposed contract for the OCR branch; acceptance by the monolith developer is pending.  
 **Machine-readable definition:** [openapi.json](openapi.json), importable into Postman.
 
-This document completes the contract-design work in task 2. It describes the intended API; there is no running implementation yet. Document-specific validation rules are defined in [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md), with synthetic expected-result cases in [examples/document-profile-cases.json](examples/document-profile-cases.json).
+This document completes the contract-design work in task 2. The service skeleton implements `/health` and a generic not-found response; the OCR processing endpoint is not implemented yet. Document-specific validation rules are defined in [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md), with synthetic expected-result cases in [examples/document-profile-cases.json](examples/document-profile-cases.json).
 
 ## 1. Integration Decisions
 
@@ -181,6 +181,7 @@ Errors use this envelope. `details` contains safe field-level metadata, never fi
 | --- | --- | --- | --- |
 | 400 | `invalid_json`, `invalid_request`, `invalid_base64` | No | Correct the request |
 | 401 | `unauthorized` | No | Supply a valid service token |
+| 404 | `not_found` | No | Check the endpoint; the processing route is unavailable until implemented |
 | 413 | `payload_too_large`, `file_too_large`, `page_limit_exceeded` | No | Reduce the request, file size, or PDF page count |
 | 415 | `unsupported_media_type`, `unsupported_file` | No | Use JSON containing a supported file with matching MIME type |
 | 422 | `unsupported_document_type`, `unreadable_document` | No | Use a supported type, a clearer document, or manual entry |

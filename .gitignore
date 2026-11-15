@@ -1,0 +1,20 @@
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+
+# Dependencies and Python environments
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Generated files
+tmp/
+temp/
+outputs/
+coverage/
+*.log
+.DS_Store
+Thumbs.db

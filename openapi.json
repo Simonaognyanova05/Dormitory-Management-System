@@ -3,7 +3,7 @@
   "info": {
     "title": "Dormitory OCR Microservice",
     "version": "1.0.0-draft",
-    "description": "Proposed contract; implementation and monolith-developer acceptance are pending. See OCR_API_CONTRACT.md for API behavior and DOCUMENT_PROFILES.md for normalization, semantic validation and required-field distinctions."
+    "description": "The skeleton implements GET /health and a generic 404 response. OCR processing implementation and monolith-developer acceptance are pending. See OCR_API_CONTRACT.md for API behavior and DOCUMENT_PROFILES.md for normalization, semantic validation and required-field distinctions."
   },
   "servers": [{"url": "http://localhost:3000", "description": "Local development (once implemented)"}],
   "security": [{"ServiceToken": []}],
@@ -90,6 +90,7 @@
           },
           "400": {"$ref": "#/components/responses/BadRequest"},
           "401": {"$ref": "#/components/responses/Unauthorized"},
+          "404": {"$ref": "#/components/responses/NotFound"},
           "413": {"$ref": "#/components/responses/TooLarge"},
           "415": {"$ref": "#/components/responses/UnsupportedMedia"},
           "422": {"$ref": "#/components/responses/UnprocessableDocument"},
@@ -219,7 +220,7 @@
           "error": {
             "type": "object", "additionalProperties": false, "required": ["code", "message", "retryable", "details"],
             "properties": {
-              "code": {"type": "string", "enum": ["invalid_json", "invalid_request", "invalid_base64", "unauthorized", "payload_too_large", "file_too_large", "page_limit_exceeded", "unsupported_media_type", "unsupported_file", "unsupported_document_type", "unreadable_document", "internal_error", "provider_bad_response", "provider_request_rejected", "provider_unavailable", "service_not_configured", "provider_configuration_error", "processing_not_configured", "processing_timeout", "provider_timeout"]},
+              "code": {"type": "string", "enum": ["invalid_json", "invalid_request", "invalid_base64", "unauthorized", "not_found", "payload_too_large", "file_too_large", "page_limit_exceeded", "unsupported_media_type", "unsupported_file", "unsupported_document_type", "unreadable_document", "internal_error", "provider_bad_response", "provider_request_rejected", "provider_unavailable", "service_not_configured", "provider_configuration_error", "processing_not_configured", "processing_timeout", "provider_timeout"]},
               "message": {"type": "string", "minLength": 1},
               "retryable": {"type": "boolean"},
               "details": {"type": "object", "additionalProperties": true, "description": "Safe field-level metadata only; never echo file content or secrets."}
@@ -236,6 +237,10 @@
       "Unauthorized": {
         "description": "unauthorized: missing or incorrect service token; not retryable.",
         "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "unauthorized", "message": "A valid service token is required.", "retryable": false, "details": {}}}}}
+      },
+      "NotFound": {
+        "description": "not_found: incorrect endpoint, or the processing route has not been implemented in this development stage; not retryable.",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "not_found", "message": "The requested endpoint was not found.", "retryable": false, "details": {}}}}}
       },
       "TooLarge": {
         "description": "payload_too_large, file_too_large or page_limit_exceeded; not retryable.",

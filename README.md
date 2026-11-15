@@ -6,7 +6,101 @@ This branch contains the OCR microservice work for the student dormitory managem
 
 ## Current Status
 
-The technology baseline is documented below, following the detailed OCR technical specification supplied for this task. A draft [API contract](OCR_API_CONTRACT.md), [OpenAPI definition](openapi.json), and [document profiles](DOCUMENT_PROFILES.md) with [synthetic example cases](examples/document-profile-cases.json) are ready for implementation and review. Team-wide confirmation and updates to conflicting project documents are still pending. The service has not been implemented yet.
+The Node.js/Express skeleton is implemented with environment configuration, `GET /health`, JSON not-found/error responses, and a Python dependency setup. The OCR processing endpoint is the next implementation step.
+
+A draft [API contract](OCR_API_CONTRACT.md), [OpenAPI definition](openapi.json), and [document profiles](DOCUMENT_PROFILES.md) with [synthetic example cases](examples/document-profile-cases.json) describe the planned extraction flow. Team-wide confirmation and updates to conflicting project documents are still pending.
+
+## Run Locally
+
+Requirements: **Node.js 20.9+** and npm. Use a current LTS release for a new Node.js installation. Python **3.10+** is needed for the preprocessing work in later tasks, but `/health` works without Python or GPT credentials.
+
+From the repository root in Windows PowerShell:
+
+```powershell
+npm ci
+Copy-Item .env.example .env
+npm start
+```
+
+The default address is **http://127.0.0.1:3000**. For automatic restarts while editing JavaScript, use `npm run dev` instead of `npm start`. Stop the process with `Ctrl+C`.
+
+### Test with Postman
+
+Create this request; no body or authentication is needed:
+
+```http
+GET http://127.0.0.1:3000/health
+```
+
+Expected HTTP **200**:
+
+```json
+{"status": "ok", "service": "dormitory-ocr"}
+```
+
+Alternatively, in PowerShell:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:3000/health
+```
+
+Other routes currently return HTTP **404** with an `error.code` of `not_found`. `POST /api/v1/ocr/process` is added in subsequent tasks; the current health check establishes process liveness only.
+
+### Python Environment
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r python/requirements.txt
+```
+
+After setup, set `PYTHON_COMMAND=.venv/Scripts/python.exe` in `.env` for later preprocessing. See [python/README.md](python/README.md) for Linux/macOS commands and library responsibilities.
+
+### Configuration
+
+`.env` is loaded from the repository root; environment variables already set by the shell take precedence. `.env.example` is the shared template. Never print the complete configuration object, which contains credentials.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `HOST` | `127.0.0.1` | HTTP bind address; deployment may use `0.0.0.0` |
+| `PORT` | `3000` | HTTP port, 1–65535 |
+| `SERVICE_TOKEN` | Empty | Shared token for the processing route starting in task 5 |
+| `PYTHON_COMMAND` | `python` | Python executable path, without command-line arguments |
+| `OPENAI_API_KEY` | Empty | Provider key used in task 8 |
+| `OPENAI_MODEL` | Empty | Vision-capable model to select before real extraction |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Provider base URL |
+| `MAX_FILE_BYTES` | `10485760` | Decoded-file limit; cannot exceed the draft contract's 10 MiB |
+| `MAX_JSON_BODY_BYTES` | `14680064` | JSON body limit; must fit Base64 plus metadata |
+| `MAX_PDF_PAGES` | `3` | PDF page limit; 1–3 |
+| `PROCESSING_TIMEOUT_MS` | `40000` | Overall processing deadline; 1–40000 ms |
+
+File and processing settings are prepared for later tasks. The skeleton validates configuration at startup; request limits will be enforced when the processing route is implemented. Missing service/AI credentials do not prevent `/health` from starting.
+
+### Commands
+
+| Command | Purpose |
+| --- | --- |
+| `npm start` | Start the HTTP service |
+| `npm run dev` | Start with Node.js watch mode |
+| `npm run check` | Check the JavaScript modules for syntax errors |
+
+### Project Structure
+
+```text
+src/
+  server.js                    # Load .env, start HTTP, handle shutdown
+  app.js                       # Assemble Express routes and middleware
+  config/env.js                # Configuration defaults and validation
+  routes/health.routes.js      # GET /health
+  middleware/                  # Safe 404/500 JSON responses
+  services/document-processing/ # Reserved for tasks 6–7
+  services/ai/                 # Reserved for task 8
+  validators/                  # Reserved for tasks 5 and 9
+python/
+  requirements.txt             # PyMuPDF, OpenCV headless, Pillow
+  README.md                    # Python setup and preprocessing boundary
+examples/
+  document-profile-cases.json   # Synthetic expected-result cases
+```
 
 ## Technology Baseline
 
@@ -81,4 +175,4 @@ See [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md) for field types, normalization,
 
 ## Next Step
 
-Review the API contract and document profiles with the team, especially institution-specific rules and application-required values. The next development step is task 4 of [OCR_TASKS.md](OCR_TASKS.md): create the Node.js/Express skeleton, Python dependency setup, configuration template, and health endpoint.
+The next development step is task 5 of [OCR_TASKS.md](OCR_TASKS.md): authenticated OCR request handling, JSON/Base64 validation, real file-format checks, and request/file size limits. Continue reviewing the contract and institution-specific profile assumptions with the team alongside implementation.

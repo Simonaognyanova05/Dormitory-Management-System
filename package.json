@@ -1,0 +1,20 @@
+{
+  "name": "dormitory-ocr-microservice",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OCR microservice for extracting student dormitory document fields.",
+  "type": "commonjs",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "check": "node --check src/server.js && node --check src/app.js && node --check src/config/env.js && node --check src/routes/health.routes.js && node --check src/middleware/not-found.js && node --check src/middleware/error-handler.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0"
+  }
+}

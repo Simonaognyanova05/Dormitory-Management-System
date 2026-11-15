@@ -45,7 +45,7 @@ My service receives a document from the monolith, prepares it, extracts its fiel
 - [x] Document proposed file size and page limits. **10 MiB and 3 pages still need confirmation with the monolith developer.**
 - [ ] Obtain the monolith developer's acceptance of identifiers, naming, responses, errors, limits, and time budgets.
 
-**Deliverables:** [OCR_API_CONTRACT.md](OCR_API_CONTRACT.md) and [openapi.json](openapi.json). Contract design is documented; team acceptance remains pending. The OpenAPI file can be imported into Postman, but the server is not implemented yet.
+**Deliverables:** [OCR_API_CONTRACT.md](OCR_API_CONTRACT.md) and [openapi.json](openapi.json). Contract design is documented; team acceptance remains pending. The OpenAPI file can be imported into Postman. The skeleton implements `/health`; the OCR processing endpoint is not implemented yet.
 
 **Done when:** both sides accept examples of a request, a successful response, a partial result, and an error.
 
@@ -65,12 +65,14 @@ My service receives a document from the monolith, prepares it, extracts its fiel
 
 ### 4. Create the Project Structure and Configuration
 
-- [ ] Initialize the Node.js project and add Express.
-- [ ] Separate API routes, document processing, the AI client, and validators into clear modules.
-- [ ] Create a directory for Python scripts and a Python dependency file.
-- [ ] Add `.gitignore` entries for `.env`, `node_modules`, the Python environment, and temporary files.
-- [ ] Add `.env.example` with the service token, GPT API key, model, port, Python command, and file limits.
-- [ ] Add startup commands and `GET /health` without calling GPT.
+- [x] Initialize the Node.js project and add Express, with a dependency lockfile for reproducible installs.
+- [x] Separate app/server setup, configuration, routes, and middleware; reserve document-processing, AI-client, and validation layers for the subsequent tasks.
+- [x] Create a directory for Python scripts and a Python dependency file.
+- [x] Add `.gitignore` entries for `.env`, `node_modules`, the Python environment, and temporary files.
+- [x] Add `.env.example` with the service token, GPT API key, model, port, Python command, and file limits.
+- [x] Add startup commands and `GET /health` without calling GPT.
+
+**Deliverables:** `package.json`, `package-lock.json`, `src/`, `python/requirements.txt`, `.env.example`, `.gitignore`, and startup/Postman instructions in [README.md](README.md). Node.js/Python dependencies were installed, JavaScript syntax and configuration were checked, and a live HTTP request confirmed that `/health` returns the OpenAPI response without AI credentials. The OCR route is implemented in later tasks.
 
 **Done when:** the service starts locally and the health check returns a successful response.
 
