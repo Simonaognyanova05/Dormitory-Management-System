@@ -6,7 +6,7 @@ This branch contains the OCR microservice work for the student dormitory managem
 
 ## Current Status
 
-The technology baseline is documented below, following the detailed OCR technical specification supplied for this task. A draft [API contract](OCR_API_CONTRACT.md) and [OpenAPI definition](openapi.json) are ready for review with the monolith developer. Team-wide confirmation and updates to conflicting project documents are still pending. The service has not been implemented yet.
+The technology baseline is documented below, following the detailed OCR technical specification supplied for this task. A draft [API contract](OCR_API_CONTRACT.md), [OpenAPI definition](openapi.json), and [document profiles](DOCUMENT_PROFILES.md) with [synthetic example cases](examples/document-profile-cases.json) are ready for implementation and review. Team-wide confirmation and updates to conflicting project documents are still pending. The service has not been implemented yet.
 
 ## Technology Baseline
 
@@ -66,9 +66,11 @@ These choices are recorded for development in this branch; they do not imply tha
 | --- | --- | --- |
 | Student status certificate | Full name, faculty number, specialty, year of study | First implementation; required by the SRS |
 | Placement order | Order number, date, dormitory, room | Required by the SRS |
-| Placement form | Personal/contact fields to be agreed | Optional, on request |
-| Address registration application | Missing address fields to be agreed | Optional, on request |
+| Placement form | Full name, phone, permanent address (working profile) | Optional, on request |
+| Address registration application | Locality, address line (working profile) | Optional, on request |
 | Medical document | No automatic extraction | Rejected by the OCR service; retained by the monolith for authorized review |
+
+See [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md) for field types, normalization, missing/invalid-value behavior, and the distinction between response keys and application submission requirements. [Synthetic examples](examples/document-profile-cases.json) provide expected results for future validator tests, not implemented OCR or measured recognition accuracy.
 
 ## Integration Responsibilities
 
@@ -79,4 +81,4 @@ These choices are recorded for development in this branch; they do not imply tha
 
 ## Next Step
 
-Review [OCR_API_CONTRACT.md](OCR_API_CONTRACT.md) with the monolith developer. Import [openapi.json](openapi.json) into Postman to inspect the proposed requests and responses. Record acceptance of the contract and technology baseline with the team, then define document profiles in task 3 of [OCR_TASKS.md](OCR_TASKS.md).
+Review the API contract and document profiles with the team, especially institution-specific rules and application-required values. The next development step is task 4 of [OCR_TASKS.md](OCR_TASKS.md): create the Node.js/Express skeleton, Python dependency setup, configuration template, and health endpoint.

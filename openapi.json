@@ -3,7 +3,7 @@
   "info": {
     "title": "Dormitory OCR Microservice",
     "version": "1.0.0-draft",
-    "description": "Proposed contract; implementation and monolith-developer acceptance are pending. See OCR_API_CONTRACT.md for behavioral rules."
+    "description": "Proposed contract; implementation and monolith-developer acceptance are pending. See OCR_API_CONTRACT.md for API behavior and DOCUMENT_PROFILES.md for normalization, semantic validation and required-field distinctions."
   },
   "servers": [{"url": "http://localhost:3000", "description": "Local development (once implemented)"}],
   "security": [{"ServiceToken": []}],
@@ -147,21 +147,21 @@
           }
         }
       },
-      "NullableText": {"type": ["string", "null"], "minLength": 1, "description": "Preserve original language and leading zeros; null requires a field issue."},
+      "NullableText": {"type": ["string", "null"], "minLength": 1, "description": "Preserve original language and leading zeros; null requires a field issue. Normalize and semantically validate under DOCUMENT_PROFILES.md. Invalid type-correct candidates remain allowed in partial responses; the 200-code-point valid-value limit is checked at runtime."},
       "CertificateFields": {
         "type": "object", "additionalProperties": false, "required": ["fullName", "facultyNumber", "specialty", "yearOfStudy"],
         "properties": {
           "fullName": {"$ref": "#/components/schemas/NullableText"},
-          "facultyNumber": {"$ref": "#/components/schemas/NullableText"},
+          "facultyNumber": {"$ref": "#/components/schemas/NullableText", "description": "Preserve as text with leading zeros; working valid-value rule is 5-12 Unicode letters or ASCII digits. Numeric input is null with invalid_format; do not guess lost zeros."},
           "specialty": {"$ref": "#/components/schemas/NullableText"},
-          "yearOfStudy": {"type": ["integer", "null"], "description": "Validate the agreed study-year range at runtime; invalid candidates require an issue."}
+          "yearOfStudy": {"type": ["integer", "null"], "description": "Working valid-value range is 1-6. Normalize exact integer strings and Roman I-VI as specified in DOCUMENT_PROFILES.md. Out-of-range integers remain allowed in partial responses with invalid_format."}
         }
       },
       "PlacementOrderFields": {
         "type": "object", "additionalProperties": false, "required": ["orderNumber", "orderDate", "dormitory", "room"],
         "properties": {
           "orderNumber": {"$ref": "#/components/schemas/NullableText"},
-          "orderDate": {"$ref": "#/components/schemas/NullableText", "description": "YYYY-MM-DD when valid; an invalid candidate requires a field issue."},
+          "orderDate": {"$ref": "#/components/schemas/NullableText", "description": "Valid ISO or day-first dates normalize to YYYY-MM-DD after calendar validation. A trailing Bulgarian year suffix is allowed; invalid strings remain in partial responses with an issue. See DOCUMENT_PROFILES.md."},
           "dormitory": {"$ref": "#/components/schemas/NullableText"},
           "room": {"$ref": "#/components/schemas/NullableText"}
         }
@@ -170,7 +170,7 @@
         "type": "object", "additionalProperties": false, "required": ["fullName", "phone", "permanentAddress"],
         "properties": {
           "fullName": {"$ref": "#/components/schemas/NullableText"},
-          "phone": {"$ref": "#/components/schemas/NullableText"},
+          "phone": {"$ref": "#/components/schemas/NullableText", "description": "Working valid-value rule: 7-15 ASCII digits after removing the documented separators and one leading plus; preserve leading zeros. Invalid candidates require an issue."},
           "permanentAddress": {"$ref": "#/components/schemas/NullableText"}
         }
       },
@@ -208,7 +208,7 @@
         "allOf": [
           {
             "if": {"properties": {"status": {"const": "completed"}}},
-            "then": {"properties": {"requiresManualReview": {"const": false}, "fieldIssues": {"maxItems": 0}, "warnings": {"maxItems": 0}}},
+            "then": {"properties": {"requiresManualReview": {"const": false}, "fieldIssues": {"maxItems": 0}, "warnings": {"maxItems": 0}, "fields": {"additionalProperties": {"not": {"type": "null"}}}}},
             "else": {"properties": {"requiresManualReview": {"const": true}}, "anyOf": [{"properties": {"fieldIssues": {"minItems": 1}}}, {"properties": {"warnings": {"minItems": 1}}}]}
           }
         ]

@@ -51,11 +51,13 @@ My service receives a document from the monolith, prepares it, extracts its fiel
 
 ### 3. Define Document Profiles
 
-- [ ] For student status certificates: full name, faculty number, specialty, and year of study.
-- [ ] For placement orders: order number, date, dormitory, and room.
+- [x] For student status certificates: define full name, faculty number, specialty, and year of study, including types, normalization, and validation rules.
+- [x] For placement orders: define order number, date, dormitory, and room, including types, normalization, and validation rules.
 - [ ] Clarify with the team which fields are required by the form and which may be absent from the document.
-- [ ] Define the medical document type as excluded from automatic processing.
-- [ ] Prepare examples with expected values for the first document type.
+- [x] Define the medical document type as excluded from automatic processing.
+- [x] Prepare synthetic examples with expected values for the first document type, including complete, missing, invalid, and uncertain results.
+
+**Deliverables:** [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md) and [examples/document-profile-cases.json](examples/document-profile-cases.json). All response keys are required, but missing source values become `null` with issues. Application submission requirements, institution-specific assumptions, and optional profile fields still need team confirmation. These examples are not PDF/image fixtures or measured OCR results.
 
 **Done when:** field names, data types, and validation rules are defined for each required document type.
 

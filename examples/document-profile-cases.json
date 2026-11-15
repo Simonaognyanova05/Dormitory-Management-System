@@ -1,0 +1,148 @@
+{
+  "version": "1.0.0-draft",
+  "synthetic": true,
+  "description": "Profile-design examples only. Source snippets are not PDF/image fixtures; rawFields/uncertainFields are illustrative validator inputs, not the public API or finalized provider contract.",
+  "cases": [
+    {
+      "id": "certificate_complete",
+      "documentId": "certificate-001",
+      "documentType": "student_certificate",
+      "detectedDocumentType": "student_certificate",
+      "sourceText": "СИНТЕТИЧЕН ПРИМЕР — УВЕРЕНИЕ\nСтудент: Иван Петров Иванов\nФакултетен номер: 001234567\nСпециалност: Компютърни системи и технологии\nКурс: II",
+      "rawFields": {"fullName": "  Иван  Петров Иванов  ", "facultyNumber": "001234567", "specialty": "Компютърни системи и технологии", "yearOfStudy": "II"},
+      "uncertainFields": [],
+      "expectedHttpStatus": 200,
+      "expectedResponse": {
+        "documentId": "certificate-001", "documentType": "student_certificate", "detectedDocumentType": "student_certificate", "status": "completed",
+        "fields": {"fullName": "Иван Петров Иванов", "facultyNumber": "001234567", "specialty": "Компютърни системи и технологии", "yearOfStudy": 2},
+        "fieldIssues": [], "warnings": [], "requiresManualReview": false
+      }
+    },
+    {
+      "id": "certificate_missing_specialty",
+      "documentId": "certificate-002",
+      "documentType": "student_certificate",
+      "detectedDocumentType": "student_certificate",
+      "sourceText": "СИНТЕТИЧЕН ПРИМЕР — УВЕРЕНИЕ\nСтудент: Иван Петров Иванов\nФакултетен номер: 001234567\nКурс: 2",
+      "rawFields": {"fullName": "Иван Петров Иванов", "facultyNumber": "001234567", "yearOfStudy": 2},
+      "uncertainFields": [],
+      "expectedHttpStatus": 200,
+      "expectedResponse": {
+        "documentId": "certificate-002", "documentType": "student_certificate", "detectedDocumentType": "student_certificate", "status": "partial",
+        "fields": {"fullName": "Иван Петров Иванов", "facultyNumber": "001234567", "specialty": null, "yearOfStudy": 2},
+        "fieldIssues": [{"field": "specialty", "code": "missing", "message": "Specialty was not found. Enter it manually."}],
+        "warnings": [], "requiresManualReview": true
+      }
+    },
+    {
+      "id": "certificate_invalid_year",
+      "documentId": "certificate-003",
+      "documentType": "student_certificate",
+      "detectedDocumentType": "student_certificate",
+      "sourceText": "СИНТЕТИЧЕН ПРИМЕР — УВЕРЕНИЕ С НЕВАЛИДНА СТОЙНОСТ\nСтудент: Иван Петров Иванов\nФакултетен номер: 001234567\nСпециалност: Компютърни системи и технологии\nКурс: 9",
+      "rawFields": {"fullName": "Иван Петров Иванов", "facultyNumber": "001234567", "specialty": "Компютърни системи и технологии", "yearOfStudy": "9"},
+      "uncertainFields": [],
+      "expectedHttpStatus": 200,
+      "expectedResponse": {
+        "documentId": "certificate-003", "documentType": "student_certificate", "detectedDocumentType": "student_certificate", "status": "partial",
+        "fields": {"fullName": "Иван Петров Иванов", "facultyNumber": "001234567", "specialty": "Компютърни системи и технологии", "yearOfStudy": 9},
+        "fieldIssues": [{"field": "yearOfStudy", "code": "invalid_format", "message": "Year of study must be between 1 and 6. Review the document."}],
+        "warnings": [], "requiresManualReview": true
+      }
+    },
+    {
+      "id": "certificate_uncertain_faculty_number",
+      "documentId": "certificate-004",
+      "documentType": "student_certificate",
+      "detectedDocumentType": "student_certificate",
+      "sourceText": "SYNTHETIC CERTIFICATE: the faculty-number character after 0012 is visually ambiguous between Cyrillic З and digit 3. Other visible values: Иван Петров Иванов; Компютърни системи и технологии; year 2.",
+      "rawFields": {"fullName": "Иван Петров Иванов", "facultyNumber": "0012З4567", "specialty": "Компютърни системи и технологии", "yearOfStudy": 2},
+      "uncertainFields": ["facultyNumber"],
+      "expectedHttpStatus": 200,
+      "expectedResponse": {
+        "documentId": "certificate-004", "documentType": "student_certificate", "detectedDocumentType": "student_certificate", "status": "partial",
+        "fields": {"fullName": "Иван Петров Иванов", "facultyNumber": "0012З4567", "specialty": "Компютърни системи и технологии", "yearOfStudy": 2},
+        "fieldIssues": [{"field": "facultyNumber", "code": "uncertain", "message": "Faculty number contains an ambiguous character. Check the original."}],
+        "warnings": [], "requiresManualReview": true
+      }
+    },
+    {
+      "id": "certificate_numeric_faculty_number",
+      "documentId": "certificate-005",
+      "documentType": "student_certificate",
+      "detectedDocumentType": "student_certificate",
+      "sourceText": "СИНТЕТИЧЕН ПРИМЕР — УВЕРЕНИЕ\nСтудент: Иван Петров Иванов\nФакултетен номер: 001234567\nСпециалност: Компютърни системи и технологии\nКурс: 2",
+      "rawFields": {"fullName": "Иван Петров Иванов", "facultyNumber": 1234567, "specialty": "Компютърни системи и технологии", "yearOfStudy": 2},
+      "uncertainFields": [],
+      "expectedHttpStatus": 200,
+      "expectedResponse": {
+        "documentId": "certificate-005", "documentType": "student_certificate", "detectedDocumentType": "student_certificate", "status": "partial",
+        "fields": {"fullName": "Иван Петров Иванов", "facultyNumber": null, "specialty": "Компютърни системи и технологии", "yearOfStudy": 2},
+        "fieldIssues": [{"field": "facultyNumber", "code": "invalid_format", "message": "Faculty number must be a string. Check the original to preserve leading zeros."}],
+        "warnings": [], "requiresManualReview": true
+      }
+    },
+    {
+      "id": "certificate_no_target_fields",
+      "documentId": "certificate-006",
+      "documentType": "student_certificate",
+      "detectedDocumentType": "student_certificate",
+      "sourceText": "СИНТЕТИЧЕН ПРИМЕР — УВЕРЕНИЕ\nНастоящото уверение се издава за административни цели. Полетата за студента не са попълнени.",
+      "rawFields": {},
+      "uncertainFields": [],
+      "expectedHttpStatus": 200,
+      "expectedResponse": {
+        "documentId": "certificate-006", "documentType": "student_certificate", "detectedDocumentType": "student_certificate", "status": "partial",
+        "fields": {"fullName": null, "facultyNumber": null, "specialty": null, "yearOfStudy": null},
+        "fieldIssues": [
+          {"field": "fullName", "code": "missing", "message": "Full name was not found. Enter it manually."},
+          {"field": "facultyNumber", "code": "missing", "message": "Faculty number was not found. Enter it manually."},
+          {"field": "specialty", "code": "missing", "message": "Specialty was not found. Enter it manually."},
+          {"field": "yearOfStudy", "code": "missing", "message": "Year of study was not found. Enter it manually."}
+        ],
+        "warnings": [], "requiresManualReview": true
+      }
+    },
+    {
+      "id": "placement_order_complete",
+      "documentId": "order-001",
+      "documentType": "placement_order",
+      "detectedDocumentType": "placement_order",
+      "sourceText": "СИНТЕТИЧЕН ПРИМЕР — ЗАПОВЕД ЗА НАСТАНЯВАНЕ\nЗаповед № РД-001\nДата: 3.11.2026 г.\nОбщежитие: 1\nСтая: 012А",
+      "rawFields": {"orderNumber": "РД-001", "orderDate": "3.11.2026 г.", "dormitory": "1", "room": "012А"},
+      "uncertainFields": [],
+      "expectedHttpStatus": 200,
+      "expectedResponse": {
+        "documentId": "order-001", "documentType": "placement_order", "detectedDocumentType": "placement_order", "status": "completed",
+        "fields": {"orderNumber": "РД-001", "orderDate": "2026-11-03", "dormitory": "1", "room": "012А"},
+        "fieldIssues": [], "warnings": [], "requiresManualReview": false
+      }
+    },
+    {
+      "id": "placement_order_invalid_date",
+      "documentId": "order-002",
+      "documentType": "placement_order",
+      "detectedDocumentType": "placement_order",
+      "sourceText": "СИНТЕТИЧЕН ПРИМЕР — ЗАПОВЕД С НЕВАЛИДНА ДАТА\nЗаповед № РД-002\nДата: 31.02.2026\nОбщежитие: 1\nСтая: 012А",
+      "rawFields": {"orderNumber": "РД-002", "orderDate": "31.02.2026", "dormitory": "1", "room": "012А"},
+      "uncertainFields": [],
+      "expectedHttpStatus": 200,
+      "expectedResponse": {
+        "documentId": "order-002", "documentType": "placement_order", "detectedDocumentType": "placement_order", "status": "partial",
+        "fields": {"orderNumber": "РД-002", "orderDate": "31.02.2026", "dormitory": "1", "room": "012А"},
+        "fieldIssues": [{"field": "orderDate", "code": "invalid_format", "message": "Order date is not a valid calendar date. Check the original."}],
+        "warnings": [], "requiresManualReview": true
+      }
+    },
+    {
+      "id": "medical_declared_rejected",
+      "documentType": "medical",
+      "description": "Reject the declared medical type before decoding/preprocessing or an AI request. No medical source content is included.",
+      "expectedProviderCalls": 0,
+      "expectedHttpStatus": 422,
+      "expectedResponse": {
+        "error": {"code": "unsupported_document_type", "message": "This document type cannot be processed.", "retryable": false, "details": {"field": "documentType"}}
+      }
+    }
+  ]
+}

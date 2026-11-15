@@ -4,7 +4,7 @@
 **Status:** proposed contract for the OCR branch; acceptance by the monolith developer is pending.  
 **Machine-readable definition:** [openapi.json](openapi.json), importable into Postman.
 
-This document completes the contract-design work in task 2. It describes the intended API; there is no running implementation yet. Document-specific validation rules and test fixtures are developed in task 3.
+This document completes the contract-design work in task 2. It describes the intended API; there is no running implementation yet. Document-specific validation rules are defined in [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md), with synthetic expected-result cases in [examples/document-profile-cases.json](examples/document-profile-cases.json).
 
 ## 1. Integration Decisions
 
@@ -46,8 +46,8 @@ All properties below are required. Unknown properties are rejected.
 | --- | --- | --- |
 | `student_certificate` | `fullName`, `facultyNumber`, `specialty`, `yearOfStudy` | First implementation; required by the SRS |
 | `placement_order` | `orderNumber`, `orderDate`, `dormitory`, `room` | Required by the SRS |
-| `placement_form` | `fullName`, `phone`, `permanentAddress` | Optional; proposed fields to confirm in task 3 |
-| `address_registration` | `city`, `addressLine` | Optional; proposed fields to confirm in task 3 |
+| `placement_form` | `fullName`, `phone`, `permanentAddress` | Optional; working profile documented in task 3, pending team confirmation |
+| `address_registration` | `city`, `addressLine` | Optional; working profile documented in task 3, pending team confirmation |
 
 `medical` and all unknown types are rejected before Python processing or any AI request. The monolith must not send medical documents to this endpoint. This check concerns the declared type; it cannot establish the actual content of a file before reading it.
 
@@ -89,7 +89,7 @@ For JPG/PNG, use the matching MIME type. The original filename and filesystem pa
 
 Both fully extracted and partial results return **HTTP 200**. A partial result is useful data, not a transport failure.
 
-Every response includes all keys for the requested document profile. Text fields are strings or `null`; `yearOfStudy` is an integer or `null`. IDs and room/order/faculty numbers remain strings so leading zeros and separators are preserved. `orderDate` is normalized to `YYYY-MM-DD` when valid; exact field-format rules are defined in task 3.
+Every successful or partial response includes all keys for the requested document profile. Text fields are strings or `null`; `yearOfStudy` is an integer or `null`. IDs and room/order/faculty numbers remain strings so leading zeros and separators are preserved. `orderDate` is normalized to `YYYY-MM-DD` when valid; exact field-format and normalization rules are defined in [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md). Required response keys are not the same as required application values: missing source fields remain reviewable partial results, while the monolith controls submission requirements.
 
 | Property | Meaning |
 | --- | --- |
