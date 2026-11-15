@@ -8,13 +8,13 @@ This branch contains the OCR microservice work for the student dormitory managem
 
 The service implements `GET /health` and authenticated request/file validation for `POST /api/v1/ocr/process`. Validation currently enables `student_certificate` with PDF/JPG/PNG input. Other document types are enabled in later implementation steps.
 
-Python preprocessing and AI extraction are not implemented yet. A valid request currently returns **503 `processing_not_configured`**, explicitly indicating that it passed admission checks but the extraction pipeline is pending. No fabricated OCR fields are returned.
+Standalone Python preprocessing is implemented and can generate prepared PNG pages and local previews. Node.js-to-Python integration and AI extraction follow in tasks 7–8. A valid HTTP request still returns **503 `processing_not_configured`** until that pipeline is connected. No fabricated OCR fields are returned.
 
 A draft [API contract](OCR_API_CONTRACT.md), [OpenAPI definition](openapi.json), and [document profiles](DOCUMENT_PROFILES.md) with [synthetic example cases](examples/document-profile-cases.json) describe the planned extraction flow. Team-wide confirmation and updates to conflicting project documents are still pending.
 
 ## Run Locally
 
-Requirements: **Node.js 20.9+** and npm. Use a current LTS release for a new Node.js installation. Python **3.10+** is needed for preprocessing in later tasks. Health and request/file validation work without Python or GPT credentials.
+Requirements: **Node.js 20.9+** and npm. Use a current LTS release for a new Node.js installation. Python **3.10+** is needed for standalone preprocessing. Health and request/file validation currently work without Python or GPT credentials.
 
 From the repository root in Windows PowerShell:
 
@@ -103,7 +103,22 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r python/requirements.txt
 ```
 
-After setup, set `PYTHON_COMMAND=.venv/Scripts/python.exe` in `.env` for later preprocessing. See [python/README.md](python/README.md) for Linux/macOS commands and library responsibilities.
+After setup, set `PYTHON_COMMAND=.venv/Scripts/python.exe` in `.env` for the upcoming Node.js integration. See [python/README.md](python/README.md) for full usage and Linux/macOS commands.
+
+Try preprocessing without real documents:
+
+```powershell
+.\.venv\Scripts\python.exe python/generate_demo_documents.py
+.\.venv\Scripts\python.exe python/preprocess.py --input tmp/demo-inputs/certificate-tilted.png --output-dir tmp/preview-tilted | Out-Null
+```
+
+Compare `tmp/preview-tilted/page-001.png` with the synthetic input; inspect `manifest.json` for dimensions and applied transformations. Use a fresh output directory when repeating a run. More examples, including scanned PDFs, EXIF rotation, explicit `--rotate`, contrast, and optional denoising, are in [python/README.md](python/README.md).
+
+Python checks:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s python/tests -v
+```
 
 ### Configuration
 
@@ -150,7 +165,11 @@ src/
   services/ai/                 # Reserved for task 8
   validators/                  # JSON/Base64/file checks; field validators in task 9
 python/
-  requirements.txt             # PyMuPDF, OpenCV headless, Pillow
+  requirements.txt             # PyMuPDF, OpenCV headless, Pillow, NumPy
+  preprocessing.py             # In-memory rendering and image preparation
+  preprocess.py                # Standalone CLI/raw-stdin entry point
+  generate_demo_documents.py   # Synthetic manual-test inputs
+  tests/test_preprocessing.py  # Rendering, geometry, quality and CLI checks
   README.md                    # Python setup and preprocessing boundary
 examples/
   document-profile-cases.json   # Synthetic expected-result cases
@@ -232,4 +251,4 @@ See [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md) for field types, normalization,
 
 ## Next Step
 
-The next development step is task 6 of [OCR_TASKS.md](OCR_TASKS.md): Python preparation of PDF pages and images. Task 7 connects the Python process to Node.js; task 8 adds GPT extraction. Continue reviewing the contract and institution-specific profile assumptions with the team alongside implementation.
+The next development step is task 7 of [OCR_TASKS.md](OCR_TASKS.md): invoke Python from Node.js, pass bytes through stdin, validate output, enforce timeouts, and handle process failures. Task 8 adds GPT extraction. Anonymized examples of real certificate/order layouts become useful for extraction tuning in tasks 8–10.

@@ -93,12 +93,14 @@ My service receives a document from the monolith, prepares it, extracts its fiel
 
 ### 6. Implement File Preparation
 
-- [ ] Open PDFs with PyMuPDF and check the page count.
-- [ ] Convert pages to images, including scanned PDFs without selectable text.
-- [ ] Support JPG/PNG input directly.
-- [ ] Correct image orientation and skew.
-- [ ] Add suitable resizing, contrast enhancement, and noise reduction, comparing results before and after processing.
-- [ ] Handle corrupt files, password-protected PDFs, and exceeded limits.
+- [x] Open PDFs with PyMuPDF and check the page count before rendering.
+- [x] Convert pages to ordered images, including scanned PDFs without selectable text.
+- [x] Support JPG/PNG input directly and flatten transparency onto white.
+- [x] Apply EXIF/PDF orientation, explicit right-angle rotation, and conservative automatic small-angle deskew.
+- [x] Add bounded resizing, conditional luminance enhancement, and opt-in noise reduction; compare synthetic geometry, contrast, noise, and clean pixels before/after processing.
+- [x] Handle corrupt files, password-protected PDFs, and byte/page/pixel limits.
+
+**Deliverables:** [python/preprocessing.py](python/preprocessing.py), [python/preprocess.py](python/preprocess.py), [demo generator](python/generate_demo_documents.py), and [21 Python tests](python/tests/test_preprocessing.py). Eight generated demo files also passed standalone CLI/preview checks. See [python/README.md](python/README.md) for preview commands, limits, rotation behavior, and the raw-stdin/JSON output convention. Preprocessing does not extract text or measure OCR accuracy. The HTTP pipeline is connected in task 7; it still returns `processing_not_configured` at this stage.
 
 **Done when:** supported files are converted into readable images with predictable dimensions.
 
