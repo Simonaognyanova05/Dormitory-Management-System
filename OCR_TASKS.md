@@ -45,7 +45,7 @@ My service receives a document from the monolith, prepares it, extracts its fiel
 - [x] Document proposed file size and page limits. **10 MiB and 3 pages still need confirmation with the monolith developer.**
 - [ ] Obtain the monolith developer's acceptance of identifiers, naming, responses, errors, limits, and time budgets.
 
-**Deliverables:** [OCR_API_CONTRACT.md](OCR_API_CONTRACT.md) and [openapi.json](openapi.json). Contract design is documented; team acceptance remains pending. The OpenAPI file can be imported into Postman. The skeleton implements `/health`; the OCR processing endpoint is not implemented yet.
+**Deliverables:** [OCR_API_CONTRACT.md](OCR_API_CONTRACT.md) and [openapi.json](openapi.json). Contract design is documented; team acceptance remains pending. The OpenAPI file can be imported into Postman. The service implements `/health` and OCR request/file admission; actual preprocessing and extraction are pending.
 
 **Done when:** both sides accept examples of a request, a successful response, a partial result, and an error.
 
@@ -72,18 +72,20 @@ My service receives a document from the monolith, prepares it, extracts its fiel
 - [x] Add `.env.example` with the service token, GPT API key, model, port, Python command, and file limits.
 - [x] Add startup commands and `GET /health` without calling GPT.
 
-**Deliverables:** `package.json`, `package-lock.json`, `src/`, `python/requirements.txt`, `.env.example`, `.gitignore`, and startup/Postman instructions in [README.md](README.md). Node.js/Python dependencies were installed, JavaScript syntax and configuration were checked, and a live HTTP request confirmed that `/health` returns the OpenAPI response without AI credentials. The OCR route is implemented in later tasks.
+**Deliverables:** `package.json`, `package-lock.json`, `src/`, `python/requirements.txt`, `.env.example`, `.gitignore`, and startup/Postman instructions in [README.md](README.md). Node.js/Python dependencies were installed, JavaScript syntax and configuration were checked, and a live HTTP request confirmed that `/health` returns the OpenAPI response without AI credentials. The extraction pipeline follows in later tasks.
 
 **Done when:** the service starts locally and the health check returns a successful response.
 
 ### 5. Implement Authenticated Request Handling
 
-- [ ] Check the service token before starting processing.
-- [ ] Validate the input JSON structure and document type.
-- [ ] Validate the Base64 content and actual file format: PDF, JPG, or PNG.
-- [ ] Limit both the JSON request size and the decoded file size, accounting for Base64 overhead.
-- [ ] Reject medical and unsupported document types **before Python processing or any GPT request**.
-- [ ] Return the agreed errors for invalid requests.
+- [x] Check the service token before JSON parsing or file processing.
+- [x] Validate the exact UTF-8 JSON structure, identifier, MIME type, and enabled document type.
+- [x] Validate canonical Base64 and actual PDF/JPG/PNG contents, including corrupt files and encrypted PDFs.
+- [x] Limit JSON/decoded bytes, PDF pages, and image pixels, accounting for Base64 overhead.
+- [x] Reject medical and unsupported document types **before file decoding, Python processing, or any GPT request**.
+- [x] Return the documented error envelope for invalid requests without exposing file contents or credentials.
+
+**Deliverables:** authenticated `POST /api/v1/ocr/process`, request and file validators, safe API errors, and `tests/request-handling.test.js`. All 17 integration/regression tests pass with generated files, including a synthetic encrypted PDF. Only `student_certificate` is enabled at this stage. Valid input currently returns `503 processing_not_configured` because the preprocessing/AI pipeline is pending; no OCR success is simulated in production. See [README.md](README.md) for Postman setup and expected responses.
 
 **Done when:** valid requests are accepted, while invalid or unauthorized requests do not reach processing.
 

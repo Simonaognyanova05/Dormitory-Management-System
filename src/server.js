@@ -15,7 +15,7 @@ function startServer() {
     return;
   }
 
-  const app = createApp();
+  const app = createApp({ config });
   const server = app.listen(config.port, config.host, () => {
     const host = config.host.includes(':') ? `[${config.host}]` : config.host;
     console.log(`Dormitory OCR service listening on http://${host}:${config.port}`);

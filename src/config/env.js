@@ -5,6 +5,7 @@ const DEFAULTS = Object.freeze({
   maxFileBytes: 10 * 1024 * 1024,
   maxJsonBodyBytes: 14 * 1024 * 1024,
   maxPdfPages: 3,
+  maxImagePixels: 20_000_000,
   processingTimeoutMs: 40_000,
 });
 
@@ -44,7 +45,7 @@ function loadConfig(env = process.env) {
   }
 
   // Missing service/AI credentials do not prevent the liveness endpoint from starting.
-  // The processing route and AI client will validate them when those features are added.
+  // The processing route and AI client validate their credentials when needed.
   return Object.freeze({
     host,
     port: integerSetting(env, 'PORT', DEFAULTS.port, 65535),
@@ -59,6 +60,7 @@ function loadConfig(env = process.env) {
       maxFileBytes,
       maxJsonBodyBytes,
       maxPdfPages: integerSetting(env, 'MAX_PDF_PAGES', DEFAULTS.maxPdfPages, DEFAULTS.maxPdfPages),
+      maxImagePixels: integerSetting(env, 'MAX_IMAGE_PIXELS', DEFAULTS.maxImagePixels, DEFAULTS.maxImagePixels),
       processingTimeoutMs: integerSetting(env, 'PROCESSING_TIMEOUT_MS', DEFAULTS.processingTimeoutMs, DEFAULTS.processingTimeoutMs),
     }),
   });

@@ -6,13 +6,15 @@ This branch contains the OCR microservice work for the student dormitory managem
 
 ## Current Status
 
-The Node.js/Express skeleton is implemented with environment configuration, `GET /health`, JSON not-found/error responses, and a Python dependency setup. The OCR processing endpoint is the next implementation step.
+The service implements `GET /health` and authenticated request/file validation for `POST /api/v1/ocr/process`. Validation currently enables `student_certificate` with PDF/JPG/PNG input. Other document types are enabled in later implementation steps.
+
+Python preprocessing and AI extraction are not implemented yet. A valid request currently returns **503 `processing_not_configured`**, explicitly indicating that it passed admission checks but the extraction pipeline is pending. No fabricated OCR fields are returned.
 
 A draft [API contract](OCR_API_CONTRACT.md), [OpenAPI definition](openapi.json), and [document profiles](DOCUMENT_PROFILES.md) with [synthetic example cases](examples/document-profile-cases.json) describe the planned extraction flow. Team-wide confirmation and updates to conflicting project documents are still pending.
 
 ## Run Locally
 
-Requirements: **Node.js 20.9+** and npm. Use a current LTS release for a new Node.js installation. Python **3.10+** is needed for the preprocessing work in later tasks, but `/health` works without Python or GPT credentials.
+Requirements: **Node.js 20.9+** and npm. Use a current LTS release for a new Node.js installation. Python **3.10+** is needed for preprocessing in later tasks. Health and request/file validation work without Python or GPT credentials.
 
 From the repository root in Windows PowerShell:
 
@@ -44,7 +46,55 @@ Alternatively, in PowerShell:
 Invoke-RestMethod http://127.0.0.1:3000/health
 ```
 
-Other routes currently return HTTP **404** with an `error.code` of `not_found`. `POST /api/v1/ocr/process` is added in subsequent tasks; the current health check establishes process liveness only.
+Unknown routes return HTTP **404** with an `error.code` of `not_found`. The health check establishes process liveness only.
+
+### Test OCR Request Validation with Postman
+
+1. Set a local shared token in `.env`, for example `SERVICE_TOKEN=your-local-service-token`.
+2. Restart the server after changing `.env`.
+3. Create `POST http://127.0.0.1:3000/api/v1/ocr/process`.
+4. Add `Content-Type: application/json` and `X-Service-Token: your-local-service-token` headers.
+5. Select **Body → raw → JSON** and paste this transport example:
+
+```json
+{
+  "documentId": "test-doc-001",
+  "documentType": "student_certificate",
+  "file": {
+    "mimeType": "image/png",
+    "contentBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC"
+  }
+}
+```
+
+This is a valid **blank 1×1 PNG**, not a student document. At the current development stage, the expected response is HTTP **503**:
+
+```json
+{
+  "error": {
+    "code": "processing_not_configured",
+    "message": "Request and file are valid, but OCR processing is not implemented yet.",
+    "retryable": false,
+    "details": {}
+  }
+}
+```
+
+This confirms the authenticated JSON, Base64, and file checks succeeded. It does not mean text was recognized. For an actual local file, use the PowerShell Base64/JSON instructions in [OCR_API_CONTRACT.md](OCR_API_CONTRACT.md).
+
+| Test change | Expected response |
+| --- | --- |
+| Leave the server's `SERVICE_TOKEN` empty | 503 `service_not_configured` |
+| Omit the header or use a different token | 401 `unauthorized` |
+| Break the JSON syntax | 400 `invalid_json` |
+| Use `!!!!` as Base64 | 400 `invalid_base64` |
+| Declare the example PNG as `image/jpeg` | 415 `unsupported_file` |
+| Set `documentType` to `medical` or a not-yet-enabled type | 422 `unsupported_document_type` |
+| Exceed the byte, pixel, or PDF page limits | 413 with the corresponding limit code |
+
+Medical/unsupported types are rejected before file decoding and inspection. Authentication runs before JSON body parsing. Requests use uncompressed UTF-8 JSON; image formats are checked against signatures, headers, and pixel decoding. PDF structure, encryption, and page counts are checked with `pdf-lib`. Image validation uses `sharp`; recognition/readability checks are added with the extraction pipeline.
+
+No actual student documents are needed for these checks. The automated tests generate synthetic PDF/PNG/JPEG inputs and include a synthetic encrypted PDF. Layout examples become useful for preprocessing and extraction in later tasks.
 
 ### Python Environment
 
@@ -63,7 +113,7 @@ After setup, set `PYTHON_COMMAND=.venv/Scripts/python.exe` in `.env` for later p
 | --- | --- | --- |
 | `HOST` | `127.0.0.1` | HTTP bind address; deployment may use `0.0.0.0` |
 | `PORT` | `3000` | HTTP port, 1–65535 |
-| `SERVICE_TOKEN` | Empty | Shared token for the processing route starting in task 5 |
+| `SERVICE_TOKEN` | Empty | Required shared token for OCR requests; `/health` stays public |
 | `PYTHON_COMMAND` | `python` | Python executable path, without command-line arguments |
 | `OPENAI_API_KEY` | Empty | Provider key used in task 8 |
 | `OPENAI_MODEL` | Empty | Vision-capable model to select before real extraction |
@@ -71,9 +121,10 @@ After setup, set `PYTHON_COMMAND=.venv/Scripts/python.exe` in `.env` for later p
 | `MAX_FILE_BYTES` | `10485760` | Decoded-file limit; cannot exceed the draft contract's 10 MiB |
 | `MAX_JSON_BODY_BYTES` | `14680064` | JSON body limit; must fit Base64 plus metadata |
 | `MAX_PDF_PAGES` | `3` | PDF page limit; 1–3 |
+| `MAX_IMAGE_PIXELS` | `20000000` | Decoded image area limit; 1–20,000,000 pixels |
 | `PROCESSING_TIMEOUT_MS` | `40000` | Overall processing deadline; 1–40000 ms |
 
-File and processing settings are prepared for later tasks. The skeleton validates configuration at startup; request limits will be enforced when the processing route is implemented. Missing service/AI credentials do not prevent `/health` from starting.
+Request/file/page/pixel limits are enforced during admission. The overall processing deadline is prepared for the later pipeline. Images with multiple decoder-reported pages are unsupported. Missing service/AI credentials do not prevent `/health` from starting; an absent service token causes OCR requests to return `service_not_configured`.
 
 ### Commands
 
@@ -82,6 +133,7 @@ File and processing settings are prepared for later tasks. The skeleton validate
 | `npm start` | Start the HTTP service |
 | `npm run dev` | Start with Node.js watch mode |
 | `npm run check` | Check the JavaScript modules for syntax errors |
+| `npm test` | Run request-validation integration tests with generated files; no AI calls or Python installation required |
 
 ### Project Structure
 
@@ -91,15 +143,20 @@ src/
   app.js                       # Assemble Express routes and middleware
   config/env.js                # Configuration defaults and validation
   routes/health.routes.js      # GET /health
-  middleware/                  # Safe 404/500 JSON responses
-  services/document-processing/ # Reserved for tasks 6–7
+  routes/ocr.routes.js         # Authenticated OCR admission route
+  errors/api-error.js          # Safe API error envelope
+  middleware/                  # Service authentication and error responses
+  services/document-processing/ # Explicit pending-pipeline boundary; tasks 6–7
   services/ai/                 # Reserved for task 8
-  validators/                  # Reserved for tasks 5 and 9
+  validators/                  # JSON/Base64/file checks; field validators in task 9
 python/
   requirements.txt             # PyMuPDF, OpenCV headless, Pillow
   README.md                    # Python setup and preprocessing boundary
 examples/
   document-profile-cases.json   # Synthetic expected-result cases
+tests/
+  request-handling.test.js      # HTTP admission and rejected-input checks
+  fixtures/encrypted-pdf.json   # Synthetic password-protected PDF
 ```
 
 ## Technology Baseline
@@ -175,4 +232,4 @@ See [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md) for field types, normalization,
 
 ## Next Step
 
-The next development step is task 5 of [OCR_TASKS.md](OCR_TASKS.md): authenticated OCR request handling, JSON/Base64 validation, real file-format checks, and request/file size limits. Continue reviewing the contract and institution-specific profile assumptions with the team alongside implementation.
+The next development step is task 6 of [OCR_TASKS.md](OCR_TASKS.md): Python preparation of PDF pages and images. Task 7 connects the Python process to Node.js; task 8 adds GPT extraction. Continue reviewing the contract and institution-specific profile assumptions with the team alongside implementation.

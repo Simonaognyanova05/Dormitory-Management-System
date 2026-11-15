@@ -4,7 +4,7 @@
 **Status:** proposed contract for the OCR branch; acceptance by the monolith developer is pending.  
 **Machine-readable definition:** [openapi.json](openapi.json), importable into Postman.
 
-This document completes the contract-design work in task 2. The service skeleton implements `/health` and a generic not-found response; the OCR processing endpoint is not implemented yet. Document-specific validation rules are defined in [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md), with synthetic expected-result cases in [examples/document-profile-cases.json](examples/document-profile-cases.json).
+This document defines the intended extraction API. Task 5 implements service authentication, bounded JSON/Base64 parsing, and file validation for `student_certificate`; valid files currently return `503 processing_not_configured` until preprocessing and extraction are connected. Other types remain disabled and return `422 unsupported_document_type`. `/health` is implemented. Document-specific field rules are defined in [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md), with synthetic expected-result cases in [examples/document-profile-cases.json](examples/document-profile-cases.json).
 
 ## 1. Integration Decisions
 
@@ -12,7 +12,7 @@ This document completes the contract-design work in task 2. The service skeleton
 | --- | --- |
 | Endpoint | `POST /api/v1/ocr/process` |
 | Local base URL | `http://localhost:3000` |
-| Request and response encoding | UTF-8 JSON |
+| Request and response encoding | UTF-8 JSON; compressed request bodies are not accepted |
 | File transport | Base64 inside JSON, following the detailed OCR specification |
 | Authentication | Shared service token in `X-Service-Token` |
 | Identifiers | Opaque strings, not UUID-only |
@@ -59,10 +59,11 @@ The architecture's `student_status_certificate` maps to this contract's `student
 - Maximum Base64 length for that file limit: **13,981,016 characters**. Decode and check the actual byte length as well.
 - Maximum complete JSON body: **14 MiB = 14,680,064 bytes**, allowing for Base64 and metadata.
 - Maximum PDF pages: **3**. Reject longer PDFs; do not silently truncate them.
+- Maximum image area: **20,000,000 pixels**. Read dimensions before decoding pixels; reject larger images as `413 file_too_large`. Images with multiple decoder-reported pages are unsupported. This is an additional working admission limit, configurable downward through `MAX_IMAGE_PIXELS`.
 - Processing target: **15 seconds** for a document of up to 3 pages under documented normal conditions.
 - Proposed hard processing deadline: **40 seconds**, including preprocessing, AI calls, and internal retries, starting after request validation. The monolith's response timeout should allow at least **45 seconds**, plus appropriate upload time.
 
-The 10 MiB/3-page limits and hard deadline are implementation proposals, not newly approved requirements. Each retry must fit inside the same processing deadline.
+The size/page/pixel limits and hard deadline are implementation proposals, not newly approved requirements. Each retry must fit inside the same processing deadline.
 
 ### Preparing a Real Request in PowerShell
 
@@ -88,6 +89,8 @@ For JPG/PNG, use the matching MIME type. The original filename and filesystem pa
 ## 3. Successful and Partial Responses
 
 Both fully extracted and partial results return **HTTP 200**. A partial result is useful data, not a transport failure.
+
+This section describes the extraction responses implemented in later tasks. Task 5 validates files without deciding whether their text is readable, and returns `503 processing_not_configured` at the pending extraction boundary. See the current-stage Postman example in [README.md](README.md).
 
 Every successful or partial response includes all keys for the requested document profile. Text fields are strings or `null`; `yearOfStudy` is an integer or `null`. IDs and room/order/faculty numbers remain strings so leading zeros and separators are preserved. `orderDate` is normalized to `YYYY-MM-DD` when valid; exact field-format and normalization rules are defined in [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md). Required response keys are not the same as required application values: missing source fields remain reviewable partial results, while the monolith controls submission requirements.
 
@@ -181,15 +184,15 @@ Errors use this envelope. `details` contains safe field-level metadata, never fi
 | --- | --- | --- | --- |
 | 400 | `invalid_json`, `invalid_request`, `invalid_base64` | No | Correct the request |
 | 401 | `unauthorized` | No | Supply a valid service token |
-| 404 | `not_found` | No | Check the endpoint; the processing route is unavailable until implemented |
-| 413 | `payload_too_large`, `file_too_large`, `page_limit_exceeded` | No | Reduce the request, file size, or PDF page count |
+| 404 | `not_found` | No | Check the endpoint and HTTP method |
+| 413 | `payload_too_large`, `file_too_large`, `page_limit_exceeded` | No | Reduce request/file size, image dimensions, or PDF page count |
 | 415 | `unsupported_media_type`, `unsupported_file` | No | Use JSON containing a supported file with matching MIME type |
 | 422 | `unsupported_document_type`, `unreadable_document` | No | Use a supported type, a clearer document, or manual entry |
 | 500 | `internal_error` | No | Investigate the service error; allow manual entry |
 | 502 | `provider_bad_response` | Yes | Retry later within the monolith's retry policy |
 | 502 | `provider_request_rejected` | No | Investigate provider/model compatibility |
 | 503 | `provider_unavailable` | Yes | Retry later with bounded backoff |
-| 503 | `service_not_configured`, `provider_configuration_error`, `processing_not_configured` | No | Correct service credentials/configuration |
+| 503 | `service_not_configured`, `provider_configuration_error`, `processing_not_configured` | No | Correct credentials/configuration; at task 5, processing is explicitly pending implementation |
 | 504 | `processing_timeout`, `provider_timeout` | Yes | Retry later or allow manual entry |
 
 The monolith checks `retryable`, not HTTP status alone. Do not retry partial results automatically. Transient network errors, provider rate limits/5xx, and invalid model responses allow at most one internal retry within the same deadline. Provider authentication errors and other non-retryable errors are not retried.
@@ -215,10 +218,10 @@ This is process liveness, not proof that Python, the AI provider, or credentials
 ## 6. Testing with Postman
 
 1. Choose **Import → Files** and select [openapi.json](openapi.json); generate a collection if prompted.
-2. Use `http://localhost:3000` as the base URL when the service has been implemented and started.
+2. Start the service and use `http://127.0.0.1:3000` as the base URL. Set `SERVICE_TOKEN` in `.env` and restart the service before testing authenticated requests.
 3. Open `POST /api/v1/ocr/process` and set API-key authentication to `X-Service-Token: <your-service-token>`; alternatively add that header directly.
 4. Set **Body → raw → JSON** and paste the body produced by the PowerShell example above.
-5. Send the request and compare the returned values with the original document.
+5. Send the request. During task 5, a valid certificate request returns `503 processing_not_configured`; after the extraction pipeline is connected, compare returned field values with the original document.
 6. Save requests for a complete result, missing-field result, invalid token, invalid Base64, unsupported type, and unreadable document.
 
 The OpenAPI request example contains a valid **1×1 blank PNG** to illustrate transport encoding. Replace it with an actual readable document before testing extraction. It is not a certificate or an accuracy-test fixture. Importing OpenAPI provides request/response documentation; it does not start an OCR server or simulate extraction.

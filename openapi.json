@@ -3,7 +3,7 @@
   "info": {
     "title": "Dormitory OCR Microservice",
     "version": "1.0.0-draft",
-    "description": "The skeleton implements GET /health and a generic 404 response. OCR processing implementation and monolith-developer acceptance are pending. See OCR_API_CONTRACT.md for API behavior and DOCUMENT_PROFILES.md for normalization, semantic validation and required-field distinctions."
+    "description": "GET /health and authenticated request/file validation are implemented. Admission currently enables student_certificate only; valid inputs return 503 processing_not_configured while extraction is pending. Other types return 422. See OCR_API_CONTRACT.md and DOCUMENT_PROFILES.md for the intended full contract; team acceptance is pending."
   },
   "servers": [{"url": "http://localhost:3000", "description": "Local development (once implemented)"}],
   "security": [{"ServiceToken": []}],
@@ -12,7 +12,7 @@
       "post": {
         "operationId": "processDocument",
         "summary": "Extract reviewable fields from one document",
-        "description": "Synchronous processing; 10 MiB decoded-file and 3 PDF-page limits are proposed. Complete and partial results both use HTTP 200. The monolith retains originals and manages jobs. Medical and unimplemented types are rejected before processing. Multipart uploads are not supported.",
+        "description": "Task 5 implements authentication and admission: 10 MiB decoded file, 14 MiB JSON, 3 PDF pages, and 20 million image pixels. Only student_certificate is currently enabled; valid inputs return 503 processing_not_configured until extraction is implemented. Future complete/partial results use HTTP 200. Medical/disabled types are rejected before decoding. Use uncompressed UTF-8 JSON; multipart is not supported.",
         "requestBody": {
           "required": true,
           "content": {
@@ -129,7 +129,7 @@
     },
     "schemas": {
       "DocumentId": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$", "description": "Opaque identifier; UUID is allowed but not required."},
-      "DocumentType": {"type": "string", "enum": ["student_certificate", "placement_order", "placement_form", "address_registration"]},
+      "DocumentType": {"type": "string", "enum": ["student_certificate", "placement_order", "placement_form", "address_registration"], "description": "Full planned registry. Only student_certificate is currently enabled for admission; other types return unsupported_document_type until enabled."},
       "ProcessRequest": {
         "type": "object", "additionalProperties": false, "required": ["documentId", "documentType", "file"],
         "properties": {
@@ -239,11 +239,11 @@
         "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "unauthorized", "message": "A valid service token is required.", "retryable": false, "details": {}}}}}
       },
       "NotFound": {
-        "description": "not_found: incorrect endpoint, or the processing route has not been implemented in this development stage; not retryable.",
+        "description": "not_found: incorrect endpoint or HTTP method; not retryable.",
         "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "not_found", "message": "The requested endpoint was not found.", "retryable": false, "details": {}}}}}
       },
       "TooLarge": {
-        "description": "payload_too_large, file_too_large or page_limit_exceeded; not retryable.",
+        "description": "payload_too_large, file_too_large (decoded bytes or pixel count) or page_limit_exceeded; not retryable.",
         "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "file_too_large", "message": "Decoded file exceeds 10 MiB.", "retryable": false, "details": {"maxBytes": 10485760}}}}}
       },
       "UnsupportedMedia": {
@@ -263,8 +263,11 @@
         "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "provider_bad_response", "message": "AI returned an invalid extraction response.", "retryable": true, "details": {}}}}}
       },
       "Unavailable": {
-        "description": "provider_unavailable is retryable; service_not_configured, provider_configuration_error and processing_not_configured are not.",
-        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "provider_unavailable", "message": "The AI provider is temporarily unavailable.", "retryable": true, "details": {}}}}}
+        "description": "provider_unavailable is retryable; service_not_configured, provider_configuration_error and processing_not_configured are not. Valid task-5 requests currently reach the pending-processing response shown here.",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "examples": {
+          "pendingProcessing": {"summary": "Current response after successful request/file validation", "value": {"error": {"code": "processing_not_configured", "message": "Request and file are valid, but OCR processing is not implemented yet.", "retryable": false, "details": {}}}},
+          "providerUnavailable": {"summary": "Future transient AI failure", "value": {"error": {"code": "provider_unavailable", "message": "The AI provider is temporarily unavailable.", "retryable": true, "details": {}}}}
+        }}}
       },
       "Timeout": {
         "description": "processing_timeout or provider_timeout; retryable within the monolith's bounded retry policy.",

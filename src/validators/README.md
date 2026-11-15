@@ -1,7 +1,9 @@
 # Validation Layer
 
-This directory is reserved for request validation in task 5 and extracted-field validation in task 9.
+`process-request.js` validates the exact request shape, canonical identifiers/types, MIME declarations, strict Base64 encoding, and decoded byte limits. It rejects unsupported/medical types before decoding the file.
+
+`document-file.js` checks actual PDF/image contents. It uses `pdf-lib` for PDF structure, encryption, and page counts, and `sharp` for image format, dimensions, and full pixel decoding. Invalid files never reach the processing boundary. Files remain in memory and are not rewritten.
 
 Use [OCR_API_CONTRACT.md](../../OCR_API_CONTRACT.md), [openapi.json](../../openapi.json), and [DOCUMENT_PROFILES.md](../../DOCUMENT_PROFILES.md) as the contract. [Synthetic cases](../../examples/document-profile-cases.json) provide expected results for future validation tests.
 
-No validators are implemented in this skeleton; configuration validation lives in `src/config/env.js`.
+Extracted-field validators are introduced in task 9. Configuration validation lives in `src/config/env.js`; service authentication and bounded UTF-8 JSON parsing run before these request validators.

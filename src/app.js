@@ -1,14 +1,17 @@
 const express = require('express');
 const healthRoutes = require('./routes/health.routes');
+const { createOcrRoutes } = require('./routes/ocr.routes');
+const { loadConfig } = require('./config/env');
+const { processDocument: defaultProcessor } = require('./services/document-processing/process-document');
 const notFound = require('./middleware/not-found');
 const errorHandler = require('./middleware/error-handler');
 
-function createApp() {
+function createApp({ config = loadConfig(), processDocument = defaultProcessor } = {}) {
   const app = express();
   app.disable('x-powered-by');
 
   app.use(healthRoutes);
-  // Authenticated JSON parsing and the OCR route are introduced in task 5.
+  app.use(createOcrRoutes({ config, processDocument }));
   app.use(notFound);
   app.use(errorHandler);
 
