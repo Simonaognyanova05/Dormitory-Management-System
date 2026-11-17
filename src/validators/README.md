@@ -8,4 +8,6 @@ Use [OCR_API_CONTRACT.md](../../OCR_API_CONTRACT.md), [openapi.json](../../opena
 
 Extracted-field validators are introduced in task 9. Configuration validation lives in `src/config/env.js`; service authentication and bounded UTF-8 JSON parsing run before these request validators.
 
+`ai-extraction.js` checks the model's structural schema, required keys, nullable JSON types, detected document type and uncertainty-field names. It does not yet implement the semantic rules in task 9. The public response therefore includes `field_validation_pending` instead of claiming that unchecked values passed field-format validation.
+
 `prepared-document.js` validates the Python result before it can reach the AI client: exact keys and types, page count/order, dimensions/transformation metadata, canonical Base64 and decoded RGB PNG content. Malformed child output becomes a fixed internal error rather than being treated as a successful preparation.

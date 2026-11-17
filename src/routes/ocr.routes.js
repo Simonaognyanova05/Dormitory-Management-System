@@ -45,7 +45,7 @@ function createOcrRoutes({ config, processDocument }) {
         req.body = undefined;
         const metadata = await inspectDocumentFile(input, config.limits);
         const result = await processDocument({ ...input, metadata, signal: controller.signal });
-        if (!res.destroyed) res.status(200).json(result);
+        if (!res.destroyed) res.set('X-OCR-AI-Provider', config.ai.provider).status(200).json(result);
       } catch (error) {
         if (!controller.signal.aborted) throw error;
       } finally {

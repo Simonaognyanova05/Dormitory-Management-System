@@ -3,16 +3,16 @@
   "info": {
     "title": "Dormitory OCR Microservice",
     "version": "1.0.0-draft",
-    "description": "GET /health, authenticated admission and real Node.js-to-Python preparation are implemented. Only student_certificate is currently enabled. After preparation, inputs return 503 processing_not_configured at stage extraction until GPT is integrated; Python startup failures use stage preprocessing. Other document types return 422. See OCR_API_CONTRACT.md and DOCUMENT_PROFILES.md; team acceptance is pending."
+    "description": "Admission, Python preparation and GPT Vision integration are implemented for student_certificate. Explicit mock mode returns fixed synthetic values marked mock_result. Until semantic validation in task 9, HTTP 200 extraction results are partial with field_validation_pending. Real-provider acceptance and quality measurements remain pending. See OCR_API_CONTRACT.md and DOCUMENT_PROFILES.md."
   },
-  "servers": [{"url": "http://localhost:3000", "description": "Local development (once implemented)"}],
+  "servers": [{"url": "http://127.0.0.1:3000", "description": "Local development"}],
   "security": [{"ServiceToken": []}],
   "paths": {
     "/api/v1/ocr/process": {
       "post": {
         "operationId": "processDocument",
         "summary": "Extract reviewable fields from one document",
-        "description": "Authentication, admission and Python preprocessing are implemented: 10 MiB decoded file, 14 MiB JSON, 3 PDF pages, 20 million input image pixels. Python receives bytes via stdin; output is bounded and validated under the processing deadline. Only student_certificate is enabled; prepared inputs return 503 processing_not_configured at stage extraction until GPT is integrated. Future complete/partial results use HTTP 200. Medical/disabled types are rejected before decoding. Use uncompressed UTF-8 JSON; multipart is not supported.",
+        "description": "Authenticated JSON/Base64 admission, Python preparation and configured OpenAI/mock extraction. Only student_certificate is enabled. Current HTTP 200 results are partial with field_validation_pending; mock results additionally carry mock_result. Missing real-provider credentials return provider_configuration_error before preprocessing. Python and AI share a deadline. Medical/disabled types are rejected before decoding. Use uncompressed UTF-8 JSON; multipart is not supported.",
         "requestBody": {
           "required": true,
           "content": {
@@ -36,13 +36,30 @@
         },
         "responses": {
           "200": {
-            "description": "Extraction completed or returned a useful partial result; human confirmation remains necessary.",
+            "description": "Reviewable extraction. Current responses are partial until task 9's semantic validation. Mock values are explicitly marked; completed examples describe the planned later contract.",
+            "headers": {"X-OCR-AI-Provider": {"description": "Explicitly selected provider; mock never means actual recognition.", "schema": {"type": "string", "enum": ["openai", "mock"]}}},
             "content": {
               "application/json": {
                 "schema": {"$ref": "#/components/schemas/ProcessResponse"},
                 "examples": {
+                  "currentExtraction": {
+                    "summary": "Current shape after real extraction; semantic validation is pending",
+                    "value": {
+                      "documentId": "test-doc-001", "documentType": "student_certificate", "detectedDocumentType": "student_certificate", "status": "partial",
+                      "fields": {"fullName": "Иван Петров Иванов", "facultyNumber": "001234567", "specialty": "Компютърни системи и технологии", "yearOfStudy": 2},
+                      "fieldIssues": [], "warnings": ["field_validation_pending"], "requiresManualReview": true
+                    }
+                  },
+                  "mockCertificate": {
+                    "summary": "Fixed DEMO values, independent of the uploaded file",
+                    "value": {
+                      "documentId": "test-doc-001", "documentType": "student_certificate", "detectedDocumentType": "student_certificate", "status": "partial",
+                      "fields": {"fullName": "Иван Петров Иванов", "facultyNumber": "001234567", "specialty": "Компютърни системи и технологии", "yearOfStudy": 2},
+                      "fieldIssues": [], "warnings": ["mock_result", "field_validation_pending"], "requiresManualReview": true
+                    }
+                  },
                   "completeCertificate": {
-                    "summary": "Complete synthetic certificate result",
+                    "summary": "Planned complete result after semantic validation; synthetic values",
                     "value": {
                       "documentId": "test-doc-001",
                       "documentType": "student_certificate",
@@ -61,7 +78,7 @@
                       "status": "partial",
                       "fields": {"fullName": "Ivan Petrov Ivanov", "facultyNumber": "001234567", "specialty": null, "yearOfStudy": 2},
                       "fieldIssues": [{"field": "specialty", "code": "missing", "message": "Specialty was not found. Enter it manually."}],
-                      "warnings": [], "requiresManualReview": true
+                      "warnings": ["field_validation_pending"], "requiresManualReview": true
                     }
                   },
                   "completePlacementOrder": {
@@ -197,7 +214,7 @@
           "status": {"type": "string", "enum": ["completed", "partial"]},
           "fields": {"type": "object"},
           "fieldIssues": {"type": "array", "items": {"$ref": "#/components/schemas/FieldIssue"}},
-          "warnings": {"type": "array", "uniqueItems": true, "items": {"type": "string", "enum": ["document_type_mismatch"]}},
+          "warnings": {"type": "array", "uniqueItems": true, "items": {"type": "string", "enum": ["document_type_mismatch", "field_validation_pending", "mock_result"]}},
           "requiresManualReview": {"type": "boolean", "description": "Additional attention flag; false does not waive human confirmation."}
         },
         "oneOf": [
@@ -263,11 +280,11 @@
         "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "provider_bad_response", "message": "AI returned an invalid extraction response.", "retryable": true, "details": {}}}}}
       },
       "Unavailable": {
-        "description": "provider_unavailable is retryable; service_not_configured, provider_configuration_error and processing_not_configured are not. The current pipeline distinguishes Python startup failure from successful preparation followed by pending AI extraction.",
+        "description": "provider_unavailable is retryable; missing credentials/model, provider authentication errors and Python startup/configuration failures are not.",
         "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "examples": {
-          "pendingProcessing": {"summary": "Current response after real Python preparation", "value": {"error": {"code": "processing_not_configured", "message": "Document prepared successfully, but AI extraction is not implemented yet.", "retryable": false, "details": {"stage": "extraction", "pageCount": 1}}}},
+          "missingAiConfiguration": {"summary": "Real mode requires an API key and model", "value": {"error": {"code": "provider_configuration_error", "message": "Configure OPENAI_API_KEY and OPENAI_MODEL before using the OpenAI provider.", "retryable": false, "details": {"stage": "extraction"}}}},
           "pythonUnavailable": {"summary": "Python executable/script/dependencies could not start", "value": {"error": {"code": "processing_not_configured", "message": "Could not start Python preprocessing. Check PYTHON_COMMAND, the script and installed dependencies.", "retryable": false, "details": {"stage": "preprocessing"}}}},
-          "providerUnavailable": {"summary": "Future transient AI failure", "value": {"error": {"code": "provider_unavailable", "message": "The AI provider is temporarily unavailable.", "retryable": true, "details": {}}}}
+          "providerUnavailable": {"summary": "Transient AI failure", "value": {"error": {"code": "provider_unavailable", "message": "The AI provider is temporarily unavailable.", "retryable": true, "details": {}}}}
         }}}
       },
       "Timeout": {

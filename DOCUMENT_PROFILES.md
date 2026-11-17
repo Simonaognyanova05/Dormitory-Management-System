@@ -6,6 +6,8 @@
 
 These are implementation profiles, not eligibility or admission rules. The faculty-number format, study-year range, phone rules, and optional-document fields below are working assumptions based on the architecture document; institution-specific confirmation is still pending.
 
+**Task 8 status:** the certificate's provider schema and structural output validation are implemented. Complete field normalization and semantic validation below are implemented in task 9. Until then, all HTTP extraction results carry `field_validation_pending` and remain `partial`; mock values additionally carry `mock_result`. See [AI client details](src/services/ai/README.md).
+
 ## 1. Profile Registry
 
 | Canonical type | Document | Extraction policy | Implementation priority |

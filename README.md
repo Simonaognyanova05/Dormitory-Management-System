@@ -10,7 +10,9 @@ The service implements `GET /health` and authenticated request/file validation f
 
 Node.js invokes Python for valid requests, receives prepared PNG pages, and validates their metadata and decoded content. Each request has an isolated child process, bounded output, a processing deadline, and cancellation on client disconnect. No temporary files are written by the HTTP pipeline.
 
-GPT extraction is the remaining step. After successful preparation, HTTP requests currently return **503 `processing_not_configured`** with `details.stage: "extraction"` and a page count. No fabricated OCR fields are returned.
+GPT Vision extraction is implemented for the certificate profile, with a strict JSON Schema and an explicitly selected mock mode. Successful requests return HTTP **200** with extracted fields for review. Until task 9 adds full semantic validation, responses remain `partial` with `field_validation_pending`. Mock responses additionally carry `mock_result` and never represent actual recognition.
+
+The real HTTP adapter was tested against local provider fixtures; a real-provider smoke test and measured extraction quality remain pending a configured key/model and sample documents.
 
 A draft [API contract](OCR_API_CONTRACT.md), [OpenAPI definition](openapi.json), and [document profiles](DOCUMENT_PROFILES.md) with [synthetic example cases](examples/document-profile-cases.json) describe the planned extraction flow. Team-wide confirmation and updates to conflicting project documents are still pending.
 
@@ -50,10 +52,10 @@ Invoke-RestMethod http://127.0.0.1:3000/health
 
 Unknown routes return HTTP **404** with an `error.code` of `not_found`. The health check establishes process liveness only.
 
-### Test OCR Request Validation with Postman
+### Test the Pipeline with Postman (No API Cost)
 
 1. Set a local shared token in `.env`, for example `SERVICE_TOKEN=your-local-service-token`.
-2. Set `PYTHON_COMMAND=.venv/Scripts/python.exe` after installing the Python dependencies below, then restart the server after changing `.env`.
+2. Set `PYTHON_COMMAND=.venv/Scripts/python.exe` after installing the Python dependencies below, and set **`AI_PROVIDER=mock`** for this demonstration. Restart after changing `.env`.
 3. Create `POST http://127.0.0.1:3000/api/v1/ocr/process`.
 4. Add `Content-Type: application/json` and `X-Service-Token: your-local-service-token` headers.
 5. Select **Body → raw → JSON** and paste this transport example:
@@ -69,23 +71,45 @@ Unknown routes return HTTP **404** with an `error.code` of `not_found`. The heal
 }
 ```
 
-This is a valid **blank 1×1 PNG**, not a student document. At the current development stage, the expected response is HTTP **503**:
+This is a valid **blank 1×1 PNG**, not a student document. Mock mode returns HTTP **200** and the following **fixed synthetic values**, independently of the image:
 
 ```json
 {
-  "error": {
-    "code": "processing_not_configured",
-    "message": "Document prepared successfully, but AI extraction is not implemented yet.",
-    "retryable": false,
-    "details": {
-      "stage": "extraction",
-      "pageCount": 1
-    }
-  }
+  "documentId": "test-doc-001",
+  "documentType": "student_certificate",
+  "detectedDocumentType": "student_certificate",
+  "status": "partial",
+  "fields": {
+    "fullName": "Иван Петров Иванов",
+    "facultyNumber": "001234567",
+    "specialty": "Компютърни системи и технологии",
+    "yearOfStudy": 2
+  },
+  "fieldIssues": [],
+  "warnings": ["mock_result", "field_validation_pending"],
+  "requiresManualReview": true
 }
 ```
 
-This confirms the authenticated JSON/Base64/file checks and the real Python preparation succeeded. It does not mean text was recognized. A `503` with `details.stage: "preprocessing"` instead means Python could not start; check the executable path and installed dependencies. For an actual local file, use the PowerShell Base64/JSON instructions in [OCR_API_CONTRACT.md](OCR_API_CONTRACT.md).
+The response header is `X-OCR-AI-Provider: mock`. This confirms admission and real Python preparation succeeded, but the field values are simulated. A `503 processing_not_configured` at stage `preprocessing` means Python could not start; check its executable and dependencies.
+
+### Real GPT Extraction
+
+Set these values in `.env`, keeping your actual key in that local file:
+
+```dotenv
+AI_PROVIDER=openai
+OPENAI_API_KEY=your-api-key
+OPENAI_MODEL=gpt-4.1-mini
+OPENAI_IMAGE_DETAIL=high
+OPENAI_TEMPERATURE=0
+```
+
+The model is a configurable starting example; it must support image inputs and strict JSON Schema via Chat Completions. Leave temperature empty for models that do not support it. Restart the server, use a **readable certificate** instead of the blank PNG, and prepare its JSON body using the PowerShell instructions in [OCR_API_CONTRACT.md](OCR_API_CONTRACT.md).
+
+Real mode sends prepared images to the configured provider and can incur API charges. It never falls back to mock. Missing credentials/model return `503 provider_configuration_error` before Python starts. The response header is `X-OCR-AI-Provider: openai`; actual extracted values still require review and carry `field_validation_pending` until task 9.
+
+For this live check, use anonymized certificate layouts or forms filled with known synthetic values and compare the four returned fields to the source. A real-provider call has not been verified in this coding session. Full configuration, provider protocol and retry behavior are documented in [src/services/ai/README.md](src/services/ai/README.md).
 
 | Test change | Expected response |
 | --- | --- |
@@ -98,10 +122,13 @@ This confirms the authenticated JSON/Base64/file checks and the real Python prep
 | Exceed the byte, pixel, or PDF page limits | 413 with the corresponding limit code |
 | Configure an unavailable Python executable | 503 `processing_not_configured`, stage `preprocessing` |
 | Python does not finish within the deadline | 504 `processing_timeout` |
+| Use real mode with a missing AI key/model | 503 `provider_configuration_error` |
+| The model finds no readable text | 422 `unreadable_document` |
+| AI output is malformed after one retry | 502 `provider_bad_response` |
 
-Medical/unsupported types are rejected before file decoding and inspection. Authentication runs before JSON body parsing. Requests use uncompressed UTF-8 JSON; image formats are checked against signatures, headers, and pixel decoding. PDF structure, encryption, and page counts are checked with `pdf-lib`. Image validation uses `sharp`; recognition/readability checks are added with the extraction pipeline.
+Medical/unsupported types are rejected before file decoding and inspection. Authentication runs before JSON body parsing. Requests use uncompressed UTF-8 JSON; image formats are checked against signatures, headers, and pixel decoding. PDF structure, encryption, and page counts are checked with `pdf-lib`. Image validation uses `sharp`, and the extraction adapter handles model-reported readability and type mismatch.
 
-No actual student documents are needed for these checks. The automated tests generate synthetic PDF/PNG/JPEG inputs and include a synthetic encrypted PDF. Layout examples become useful for preprocessing and extraction in later tasks.
+No actual student documents are needed for transport/mock tests. The automated tests generate synthetic inputs and use local provider responses. Real layouts are now useful for the live extraction check and later accuracy measurement; mock results cannot establish recognition quality.
 
 ### Python Environment
 
@@ -145,9 +172,15 @@ Python checks:
 | `PORT` | `3000` | HTTP port, 1–65535 |
 | `SERVICE_TOKEN` | Empty | Required shared token for OCR requests; `/health` stays public |
 | `PYTHON_COMMAND` | `python` | Python executable path, without command-line arguments |
-| `OPENAI_API_KEY` | Empty | Provider key used in task 8 |
+| `AI_PROVIDER` | `openai` | `openai` for real extraction; explicit `mock` for fixed demonstration values |
+| `OPENAI_API_KEY` | Empty | Required for real provider requests |
 | `OPENAI_MODEL` | Empty | Vision-capable model to select before real extraction |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Provider base URL |
+| `OPENAI_IMAGE_DETAIL` | `high` | `low`, `high`, `auto`, or model-specific `original` |
+| `OPENAI_TEMPERATURE` | Omitted | Optional value 0–2; leave empty for incompatible models |
+| `AI_MAX_OUTPUT_TOKENS` | `2048` | Provider completion token limit, 1–8192 |
+| `AI_REQUEST_TIMEOUT_MS` | `20000` | Per-attempt cap; bounded by the remaining overall deadline |
+| `MAX_AI_RESPONSE_BYTES` | `262144` | Streamed provider-response limit, up to 256 KiB |
 | `MAX_FILE_BYTES` | `10485760` | Decoded-file limit; cannot exceed the draft contract's 10 MiB |
 | `MAX_JSON_BODY_BYTES` | `14680064` | JSON body limit; must fit Base64 plus metadata |
 | `MAX_PDF_PAGES` | `3` | PDF page limit; 1–3 |
@@ -156,7 +189,7 @@ Python checks:
 | `MAX_PREPROCESS_STDOUT_BYTES` | `67108864` | Maximum Python JSON output; 1–64 MiB |
 | `MAX_PREPROCESS_STDERR_BYTES` | `65536` | Maximum Python diagnostics; 1–64 KiB; counted and discarded |
 
-Request/file/page/pixel limits are enforced during admission and passed to Python. The processing deadline covers Python startup, execution, and output validation, and is available for the upcoming AI stage. On cancellation, timeout, or output overflow, the worker is terminated; termination has a 250 ms force-kill fallback. Images with multiple decoder-reported pages are unsupported. Missing service/AI credentials do not prevent `/health` from starting; an absent service token causes OCR requests to return `service_not_configured`.
+Request/file/page/pixel limits are enforced during admission and passed to Python. The processing deadline covers Python and the AI stage, including at most one provider retry; it is not reset after preprocessing. Python workers are terminated on cancellation/timeout/output overflow, with a 250 ms force-kill fallback. AI transport is aborted on timeout/disconnect. Images with multiple decoder-reported pages are unsupported. Missing service/AI credentials do not prevent `/health` from starting.
 
 ### Commands
 
@@ -165,8 +198,8 @@ Request/file/page/pixel limits are enforced during admission and passed to Pytho
 | `npm start` | Start the HTTP service |
 | `npm run dev` | Start with Node.js watch mode |
 | `npm run check` | Check the JavaScript modules for syntax errors |
-| `npm test` | Run admission and child-process protocol/lifecycle tests; requires Node.js only and makes no AI calls |
-| `npm run test:python` | Run real Python integration tests, including simultaneous documents, image-only PDF pages, and HTTP processing |
+| `npm test` | Run admission, child-process and AI client tests with local/injected provider responses; no paid AI calls |
+| `npm run test:python` | Run real Python integration tests, including the HTTP pipeline with explicit mock extraction |
 | `npm run check:python` | Check the configured Python process and print a safe preparation summary |
 
 For `test:python`, configure Python in `.env` or `PYTHON_COMMAND`; if neither is set, the tests detect a local `.venv` before falling back to `python`. Production and `check:python` use the configured command directly.
@@ -182,9 +215,9 @@ src/
   routes/ocr.routes.js         # Authenticated OCR admission route
   errors/api-error.js          # Safe API error envelope
   middleware/                  # Service authentication and error responses
-  services/document-processing/ # Python subprocess adapter and pending AI boundary
-  services/ai/                 # Reserved for task 8
-  validators/                  # Request/file/prepared-PNG checks; field validators in task 9
+  services/document-processing/ # Python → AI orchestration and shared deadline
+  services/ai/                 # GPT client, strict schema, mock and response mapping
+  validators/                  # Request/file/PNG/model-shape checks; semantic rules in task 9
 scripts/
   check-python.js              # Actual Node.js → Python smoke check
 python/
@@ -200,6 +233,7 @@ tests/
   request-handling.test.js      # HTTP admission and rejected-input checks
   python-preprocessor.test.js  # Process failures, output validation, deadlines and cancellation
   python-integration.test.js   # Real Python and HTTP integration
+  ai-extraction.test.js        # Provider protocol, errors, deadlines, mock and HTTP extraction
   fixtures/encrypted-pdf.json   # Synthetic password-protected PDF
 ```
 
@@ -276,4 +310,4 @@ See [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md) for field types, normalization,
 
 ## Next Step
 
-The next development step is task 8 of [OCR_TASKS.md](OCR_TASKS.md): integrate a vision-capable GPT model with structured output and a replaceable test client. Anonymized examples of real certificate/order layouts become useful now for extraction tuning in tasks 8–10.
+Configure the real provider and verify a readable certificate to finish task 8's live acceptance check. The next implementation step is task 9 of [OCR_TASKS.md](OCR_TASKS.md): full field normalization, semantic validation and removal of `field_validation_pending` once those rules are active.

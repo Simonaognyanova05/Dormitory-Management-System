@@ -53,8 +53,9 @@ test('real Python input errors are mapped back to the safe API envelope', async 
   });
 });
 
-test('the live HTTP pipeline prepares images before reaching the pending AI stage', async (t) => {
-  const server = createApp({ config }).listen(0, '127.0.0.1');
+test('the live HTTP pipeline prepares images and returns explicitly marked mock extraction', async (t) => {
+  const mockConfig = loadConfig({ ...process.env, SERVICE_TOKEN: 'python-integration-token', PYTHON_COMMAND: config.pythonCommand, AI_PROVIDER: 'mock', OPENAI_API_KEY: '', OPENAI_MODEL: '' });
+  const server = createApp({ config: mockConfig }).listen(0, '127.0.0.1');
   await once(server, 'listening');
   t.after(() => new Promise((resolve) => { server.closeAllConnections(); server.close(resolve); }));
   const response = await fetch(`http://127.0.0.1:${server.address().port}/api/v1/ocr/process`, {
@@ -62,9 +63,11 @@ test('the live HTTP pipeline prepares images before reaching the pending AI stag
     headers: { 'Content-Type': 'application/json', 'X-Service-Token': 'python-integration-token' },
     body: JSON.stringify({ documentId: 'real-python-test', documentType: 'student_certificate', file: { mimeType: 'image/png', contentBase64: (await image('white')).toString('base64') } }),
   });
-  assert.equal(response.status, 503);
-  assert.deepEqual(await response.json(), { error: {
-    code: 'processing_not_configured', message: 'Document prepared successfully, but AI extraction is not implemented yet.',
-    retryable: false, details: { stage: 'extraction', pageCount: 1 },
-  } });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('x-ocr-ai-provider'), 'mock');
+  const result = await response.json();
+  assert.equal(result.fields.facultyNumber, '001234567');
+  assert.deepEqual(result.warnings, ['mock_result', 'field_validation_pending']);
+  assert.equal(result.status, 'partial');
+  assert.equal(result.requiresManualReview, true);
 });

@@ -9,6 +9,7 @@ const DEFAULTS = Object.freeze({
   processingTimeoutMs: 40_000,
   maxPreprocessStdoutBytes: 64 * 1024 * 1024,
   maxPreprocessStderrBytes: 64 * 1024,
+  maxAiResponseBytes: 256 * 1024,
 });
 
 function integerSetting(env, name, fallback, maximum) {
@@ -39,11 +40,21 @@ function loadConfig(env = process.env) {
   const baseUrl = env.OPENAI_BASE_URL?.trim() || 'https://api.openai.com/v1';
   try {
     const parsed = new URL(baseUrl);
-    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) {
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash) {
       throw new Error('Invalid provider URL.');
     }
   } catch {
-    throw new Error('OPENAI_BASE_URL must be an HTTP(S) URL without embedded credentials.');
+    throw new Error('OPENAI_BASE_URL must be an HTTP(S) base URL without credentials, query or fragment.');
+  }
+
+  const provider = env.AI_PROVIDER?.trim().toLowerCase() || 'openai';
+  if (!['openai', 'mock'].includes(provider)) throw new Error('AI_PROVIDER must be openai or mock.');
+  const imageDetail = env.OPENAI_IMAGE_DETAIL?.trim().toLowerCase() || 'high';
+  if (!['low', 'high', 'auto', 'original'].includes(imageDetail)) throw new Error('OPENAI_IMAGE_DETAIL must be low, high, auto or original.');
+  let temperature;
+  if (env.OPENAI_TEMPERATURE?.trim()) {
+    temperature = Number(env.OPENAI_TEMPERATURE);
+    if (!Number.isFinite(temperature) || temperature < 0 || temperature > 2) throw new Error('OPENAI_TEMPERATURE must be between 0 and 2, or empty.');
   }
 
   // Missing service/AI credentials do not prevent the liveness endpoint from starting.
@@ -54,9 +65,14 @@ function loadConfig(env = process.env) {
     serviceToken: env.SERVICE_TOKEN?.trim() || '',
     pythonCommand: env.PYTHON_COMMAND?.trim() || 'python',
     ai: Object.freeze({
+      provider,
       apiKey: env.OPENAI_API_KEY?.trim() || '',
       model: env.OPENAI_MODEL?.trim() || '',
       baseUrl,
+      imageDetail,
+      temperature,
+      maxOutputTokens: integerSetting(env, 'AI_MAX_OUTPUT_TOKENS', 2048, 8192),
+      requestTimeoutMs: integerSetting(env, 'AI_REQUEST_TIMEOUT_MS', 20_000, 40_000),
     }),
     limits: Object.freeze({
       maxFileBytes,
@@ -66,6 +82,7 @@ function loadConfig(env = process.env) {
       processingTimeoutMs: integerSetting(env, 'PROCESSING_TIMEOUT_MS', DEFAULTS.processingTimeoutMs, DEFAULTS.processingTimeoutMs),
       maxPreprocessStdoutBytes: integerSetting(env, 'MAX_PREPROCESS_STDOUT_BYTES', DEFAULTS.maxPreprocessStdoutBytes, DEFAULTS.maxPreprocessStdoutBytes),
       maxPreprocessStderrBytes: integerSetting(env, 'MAX_PREPROCESS_STDERR_BYTES', DEFAULTS.maxPreprocessStderrBytes, DEFAULTS.maxPreprocessStderrBytes),
+      maxAiResponseBytes: integerSetting(env, 'MAX_AI_RESPONSE_BYTES', DEFAULTS.maxAiResponseBytes, DEFAULTS.maxAiResponseBytes),
     }),
   });
 }

@@ -85,7 +85,7 @@ My service receives a document from the monolith, prepares it, extracts its fiel
 - [x] Reject medical and unsupported document types **before file decoding, Python processing, or any GPT request**.
 - [x] Return the documented error envelope for invalid requests without exposing file contents or credentials.
 
-**Deliverables:** authenticated `POST /api/v1/ocr/process`, request and file validators, safe API errors, and `tests/request-handling.test.js`. The admission tests cover generated files, including a synthetic encrypted PDF. Only `student_certificate` is enabled at this stage. The current pipeline prepares valid input and then returns `503 processing_not_configured` because AI extraction is pending; no OCR success is simulated in production. See [README.md](README.md) for Postman setup and expected responses.
+**Deliverables:** authenticated `POST /api/v1/ocr/process`, request and file validators, safe API errors, and `tests/request-handling.test.js`. Admission tests cover generated files, including a synthetic encrypted PDF. Only `student_certificate` is enabled. The current pipeline prepares valid input and returns reviewable real/mock extraction; mock values are explicitly labeled. See [README.md](README.md) for Postman setup and expected responses.
 
 **Done when:** valid requests are accepted, while invalid or unauthorized requests do not reach processing.
 
@@ -100,7 +100,7 @@ My service receives a document from the monolith, prepares it, extracts its fiel
 - [x] Add bounded resizing, conditional luminance enhancement, and opt-in noise reduction; compare synthetic geometry, contrast, noise, and clean pixels before/after processing.
 - [x] Handle corrupt files, password-protected PDFs, and byte/page/pixel limits.
 
-**Deliverables:** [python/preprocessing.py](python/preprocessing.py), [python/preprocess.py](python/preprocess.py), [demo generator](python/generate_demo_documents.py), and [21 Python tests](python/tests/test_preprocessing.py). Eight generated demo files also passed standalone CLI/preview checks. See [python/README.md](python/README.md) for preview commands, limits, rotation behavior, and the raw-stdin/JSON output convention. Preprocessing does not extract text or measure OCR accuracy. Task 7 connects it to HTTP; the current `processing_not_configured` response refers to the pending AI stage.
+**Deliverables:** [python/preprocessing.py](python/preprocessing.py), [python/preprocess.py](python/preprocess.py), [demo generator](python/generate_demo_documents.py), and [21 Python tests](python/tests/test_preprocessing.py). Eight generated demo files also passed standalone CLI/preview checks. See [python/README.md](python/README.md) for commands and protocol. Python preparation itself does not extract text or measure OCR accuracy; tasks 7–8 connect it to HTTP and the vision client.
 
 **Done when:** supported files are converted into readable images with predictable dimensions.
 
@@ -113,7 +113,7 @@ My service receives a document from the monolith, prepares it, extracts its fiel
 - [x] Enforce the processing deadline, terminate stalled processes, and cancel workers when an HTTP client disconnects.
 - [x] Keep production processing in memory with one isolated child per request; no temporary files need cleanup.
 
-**Deliverables:** [Python adapter](src/services/document-processing/python-preprocessor.js), [prepared-output validator](src/validators/prepared-document.js), pipeline wiring, and `npm run check:python`. All **29 Node.js admission/lifecycle tests** and **4 real Python integration tests** passed, including simultaneous documents and live HTTP processing. A valid request now completes preparation and reaches the explicit pending-AI response at stage `extraction`.
+**Deliverables:** [Python adapter](src/services/document-processing/python-preprocessor.js), [prepared-output validator](src/validators/prepared-document.js), pipeline wiring, and `npm run check:python`. Its lifecycle/concurrency tests cover simultaneous documents and live HTTP processing. Prepared images now continue to the vision client added in task 8.
 
 **Done when:** an API request receives prepared images, and concurrent requests do not mix their files.
 
@@ -121,12 +121,15 @@ My service receives a document from the monolith, prepares it, extracts its fiel
 
 ### 8. Integrate GPT Vision
 
-- [ ] Create an AI client with a configurable key and vision-capable model.
-- [ ] Send the prepared images with specific instructions for the certificate's four fields.
-- [ ] Require structured JSON without additional free text.
-- [ ] Instruct the model to return `null` for missing values rather than inventing information.
-- [ ] Instruct the model to treat document content as data rather than instructions.
-- [ ] Add a replaceable test/mock client for development without real AI calls and clearly label it as a simulation.
+- [x] Create an AI client with a configurable key and vision-capable model.
+- [x] Send the prepared images with specific instructions for the certificate's four fields.
+- [x] Require strict JSON Schema output and independently check its structure at runtime.
+- [x] Instruct the model to return `null` for missing values rather than inventing information.
+- [x] Instruct the model to treat document content as data rather than instructions.
+- [x] Add an explicitly selected mock client with fixed synthetic data, a response header and a `mock_result` warning; never use it as an error fallback.
+- [ ] Verify one readable certificate through a real configured provider and compare returned fields with known source values.
+
+**Deliverables:** [AI client layer](src/services/ai/README.md), strict schema/prompt, OpenAI HTTP adapter, response mapping and shared-budget retries/cancellation. All **45 Node.js tests** and **4 real Python integration tests** passed using local provider fixtures or explicit mock mode. The paid-provider acceptance check above is pending credentials/model and sample input. Until task 9, HTTP results remain `partial` with `field_validation_pending`; no format-validation or OCR-accuracy success is claimed.
 
 **Done when:** a real provider returns extracted values from a sample certificate.
 
