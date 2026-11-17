@@ -234,11 +234,13 @@ test('checks image dimensions before pixel decoding', async (t) => {
   assert.equal(app.calls.length, 0);
 });
 
-test('the documented Postman PNG reaches the explicit pending-pipeline response', async (t) => {
-  const app = await startApp(t, { useDefaultProcessor: true });
+test('the documented Postman PNG reaches the processing boundary after admission', async (t) => {
+  const app = await startApp(t);
   const example = openapi.paths['/api/v1/ocr/process'].post.requestBody.content['application/json'].examples.transportExample.value;
-  const result = await expectError(await app.post(example), 503, 'processing_not_configured');
-  assert.match(result.error.message, /Request and file are valid/);
+  const response = await app.post(example);
+  assert.equal(response.status, 200);
+  assert.equal(app.calls.length, 1);
+  assert.equal(app.calls[0].metadata.format, 'png');
 });
 
 test('unexpected processing errors do not expose exception messages', async (t) => {

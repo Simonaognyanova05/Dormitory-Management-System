@@ -2,7 +2,7 @@
 
 Task 6 implements standalone preparation of **PDF, scanned PDF, JPG, and PNG** inputs. This is image preprocessing, not OCR: no text fields are extracted and no AI service is called.
 
-Task 7 connects this entry point to Node.js through `child_process.spawn()`. Until that integration and extraction are implemented, the HTTP endpoint continues to return `503 processing_not_configured` for valid requests.
+Node.js now invokes this entry point through `child_process.spawn()` for valid requests. After preparation, the HTTP endpoint returns `503 processing_not_configured` with stage `extraction` while task 8's GPT client is pending.
 
 ## Environment
 
@@ -13,13 +13,15 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r python/requirements.txt
 ```
 
-For the upcoming Node.js integration, set this in the root `.env`:
+For the Node.js integration, set this in the root `.env` and restart the HTTP service:
 
 ```dotenv
 PYTHON_COMMAND=.venv/Scripts/python.exe
 ```
 
 On Linux/macOS, use `python3 -m venv .venv`, `.venv/bin/python -m pip install -r python/requirements.txt`, and `PYTHON_COMMAND=.venv/bin/python`.
+
+Run `npm run check:python` from the repository root to verify the configured executable and libraries through the actual Node.js adapter. It prints metadata for a tiny synthetic PNG and makes no AI calls.
 
 Dependencies: PyMuPDF renders PDFs; Pillow decodes images and applies orientation metadata; OpenCV and NumPy provide bounded image analysis and transformations. Headless OpenCV has no desktop GUI requirement.
 
@@ -107,7 +109,7 @@ Limits can be lowered to match the monolith's configuration. Password-protected 
 
 ## Internal Result for Node.js Integration
 
-The future child-process invocation uses raw stdin with `--stdin --mime-type ...`. For a processing invocation, stdout contains exactly one JSON object and a newline:
+The Node.js adapter uses raw stdin with `--stdin --mime-type ...`, passes the configured byte/page/pixel limits, and fixes the output side bound at 2000 pixels. For a processing invocation, stdout contains exactly one JSON object and a newline:
 
 ```text
 {
@@ -132,7 +134,7 @@ The future child-process invocation uses raw stdin with `--stdin --mime-type ...
 }
 ```
 
-This is an **internal preprocessing result**, not the public OCR response. Image bytes can be larger than the compressed source; task 7 must bound stdout and enforce the processing deadline. Production child-process calls should omit `--output-dir` and keep pages in memory.
+This is an **internal preprocessing result**, not the public OCR response. Image bytes can be larger than the compressed source. Node.js bounds stdout/stderr, validates page counts/order, image dimensions, transformations, canonical Base64, and actual PNG decoding, and enforces the remaining processing deadline. Production calls omit `--output-dir` and keep pages in memory; only explicit standalone previews write files.
 
 Errors use the shared `{ "error": { "code", "message", "retryable", "details" } }` envelope on stdout with a nonzero exit code. Stderr contains only a short diagnostic code, not input content, filenames, or a traceback. Exit codes: **0** success, **2** invalid/unsupported input or options, **1** internal failure. `--help` is the normal human-readable exception to the JSON output convention.
 
@@ -142,4 +144,4 @@ Errors use the shared `{ "error": { "code", "message", "retryable", "details" } 
 .\.venv\Scripts\python.exe -m unittest discover -s python/tests -v
 ```
 
-The suite creates synthetic documents in memory and uses temporary directories for CLI preview checks. It requires only the dependencies in `python/requirements.txt` and makes no AI calls. Node.js HTTP admission checks remain available separately through `npm test`.
+The suite creates synthetic documents in memory and uses temporary directories for CLI preview checks. It requires only the dependencies in `python/requirements.txt` and makes no AI calls. Run `npm test` for Node.js admission/process-failure tests and `npm run test:python` for the real cross-language integration suite.

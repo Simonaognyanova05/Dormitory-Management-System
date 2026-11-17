@@ -37,11 +37,20 @@ function createOcrRoutes({ config, processDocument }) {
       },
     }),
     async (req, res) => {
-      const input = validateProcessRequest(req.body, config.limits);
-      req.body = undefined;
-      const metadata = await inspectDocumentFile(input, config.limits);
-      const result = await processDocument({ ...input, metadata });
-      res.status(200).json(result);
+      const controller = new AbortController();
+      const onClose = () => { if (!res.writableFinished) controller.abort(); };
+      res.once('close', onClose);
+      try {
+        const input = validateProcessRequest(req.body, config.limits);
+        req.body = undefined;
+        const metadata = await inspectDocumentFile(input, config.limits);
+        const result = await processDocument({ ...input, metadata, signal: controller.signal });
+        if (!res.destroyed) res.status(200).json(result);
+      } catch (error) {
+        if (!controller.signal.aborted) throw error;
+      } finally {
+        res.off('close', onClose);
+      }
     },
   );
 

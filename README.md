@@ -8,13 +8,15 @@ This branch contains the OCR microservice work for the student dormitory managem
 
 The service implements `GET /health` and authenticated request/file validation for `POST /api/v1/ocr/process`. Validation currently enables `student_certificate` with PDF/JPG/PNG input. Other document types are enabled in later implementation steps.
 
-Standalone Python preprocessing is implemented and can generate prepared PNG pages and local previews. Node.js-to-Python integration and AI extraction follow in tasks 7–8. A valid HTTP request still returns **503 `processing_not_configured`** until that pipeline is connected. No fabricated OCR fields are returned.
+Node.js invokes Python for valid requests, receives prepared PNG pages, and validates their metadata and decoded content. Each request has an isolated child process, bounded output, a processing deadline, and cancellation on client disconnect. No temporary files are written by the HTTP pipeline.
+
+GPT extraction is the remaining step. After successful preparation, HTTP requests currently return **503 `processing_not_configured`** with `details.stage: "extraction"` and a page count. No fabricated OCR fields are returned.
 
 A draft [API contract](OCR_API_CONTRACT.md), [OpenAPI definition](openapi.json), and [document profiles](DOCUMENT_PROFILES.md) with [synthetic example cases](examples/document-profile-cases.json) describe the planned extraction flow. Team-wide confirmation and updates to conflicting project documents are still pending.
 
 ## Run Locally
 
-Requirements: **Node.js 20.9+** and npm. Use a current LTS release for a new Node.js installation. Python **3.10+** is needed for standalone preprocessing. Health and request/file validation currently work without Python or GPT credentials.
+Requirements: **Node.js 20.9+** and npm. Use a current LTS release for a new Node.js installation. Python **3.10+** and its dependencies are required for valid OCR requests. Health and admission checks remain independent of Python/GPT credentials.
 
 From the repository root in Windows PowerShell:
 
@@ -51,7 +53,7 @@ Unknown routes return HTTP **404** with an `error.code` of `not_found`. The heal
 ### Test OCR Request Validation with Postman
 
 1. Set a local shared token in `.env`, for example `SERVICE_TOKEN=your-local-service-token`.
-2. Restart the server after changing `.env`.
+2. Set `PYTHON_COMMAND=.venv/Scripts/python.exe` after installing the Python dependencies below, then restart the server after changing `.env`.
 3. Create `POST http://127.0.0.1:3000/api/v1/ocr/process`.
 4. Add `Content-Type: application/json` and `X-Service-Token: your-local-service-token` headers.
 5. Select **Body → raw → JSON** and paste this transport example:
@@ -73,14 +75,17 @@ This is a valid **blank 1×1 PNG**, not a student document. At the current devel
 {
   "error": {
     "code": "processing_not_configured",
-    "message": "Request and file are valid, but OCR processing is not implemented yet.",
+    "message": "Document prepared successfully, but AI extraction is not implemented yet.",
     "retryable": false,
-    "details": {}
+    "details": {
+      "stage": "extraction",
+      "pageCount": 1
+    }
   }
 }
 ```
 
-This confirms the authenticated JSON, Base64, and file checks succeeded. It does not mean text was recognized. For an actual local file, use the PowerShell Base64/JSON instructions in [OCR_API_CONTRACT.md](OCR_API_CONTRACT.md).
+This confirms the authenticated JSON/Base64/file checks and the real Python preparation succeeded. It does not mean text was recognized. A `503` with `details.stage: "preprocessing"` instead means Python could not start; check the executable path and installed dependencies. For an actual local file, use the PowerShell Base64/JSON instructions in [OCR_API_CONTRACT.md](OCR_API_CONTRACT.md).
 
 | Test change | Expected response |
 | --- | --- |
@@ -91,6 +96,8 @@ This confirms the authenticated JSON, Base64, and file checks succeeded. It does
 | Declare the example PNG as `image/jpeg` | 415 `unsupported_file` |
 | Set `documentType` to `medical` or a not-yet-enabled type | 422 `unsupported_document_type` |
 | Exceed the byte, pixel, or PDF page limits | 413 with the corresponding limit code |
+| Configure an unavailable Python executable | 503 `processing_not_configured`, stage `preprocessing` |
+| Python does not finish within the deadline | 504 `processing_timeout` |
 
 Medical/unsupported types are rejected before file decoding and inspection. Authentication runs before JSON body parsing. Requests use uncompressed UTF-8 JSON; image formats are checked against signatures, headers, and pixel decoding. PDF structure, encryption, and page counts are checked with `pdf-lib`. Image validation uses `sharp`; recognition/readability checks are added with the extraction pipeline.
 
@@ -103,7 +110,15 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r python/requirements.txt
 ```
 
-After setup, set `PYTHON_COMMAND=.venv/Scripts/python.exe` in `.env` for the upcoming Node.js integration. See [python/README.md](python/README.md) for full usage and Linux/macOS commands.
+After setup, set `PYTHON_COMMAND=.venv/Scripts/python.exe` in `.env` on Windows, or `PYTHON_COMMAND=.venv/bin/python` on Linux/macOS. A path is resolved from the repository root and is passed as one executable, even if it contains spaces; do not add arguments or shell commands to this value. Restart the server after changing it. See [python/README.md](python/README.md) for standalone usage.
+
+Verify Node.js → Python independently of the HTTP service:
+
+```powershell
+npm run check:python
+```
+
+This sends the synthetic 1×1 PNG to the actual Python process and prints page dimensions/transforms without image data. It requires neither a service token nor a GPT key. The check uses the same `PYTHON_COMMAND` configuration as production.
 
 Try preprocessing without real documents:
 
@@ -138,8 +153,10 @@ Python checks:
 | `MAX_PDF_PAGES` | `3` | PDF page limit; 1–3 |
 | `MAX_IMAGE_PIXELS` | `20000000` | Decoded image area limit; 1–20,000,000 pixels |
 | `PROCESSING_TIMEOUT_MS` | `40000` | Overall processing deadline; 1–40000 ms |
+| `MAX_PREPROCESS_STDOUT_BYTES` | `67108864` | Maximum Python JSON output; 1–64 MiB |
+| `MAX_PREPROCESS_STDERR_BYTES` | `65536` | Maximum Python diagnostics; 1–64 KiB; counted and discarded |
 
-Request/file/page/pixel limits are enforced during admission. The overall processing deadline is prepared for the later pipeline. Images with multiple decoder-reported pages are unsupported. Missing service/AI credentials do not prevent `/health` from starting; an absent service token causes OCR requests to return `service_not_configured`.
+Request/file/page/pixel limits are enforced during admission and passed to Python. The processing deadline covers Python startup, execution, and output validation, and is available for the upcoming AI stage. On cancellation, timeout, or output overflow, the worker is terminated; termination has a 250 ms force-kill fallback. Images with multiple decoder-reported pages are unsupported. Missing service/AI credentials do not prevent `/health` from starting; an absent service token causes OCR requests to return `service_not_configured`.
 
 ### Commands
 
@@ -148,7 +165,11 @@ Request/file/page/pixel limits are enforced during admission. The overall proces
 | `npm start` | Start the HTTP service |
 | `npm run dev` | Start with Node.js watch mode |
 | `npm run check` | Check the JavaScript modules for syntax errors |
-| `npm test` | Run request-validation integration tests with generated files; no AI calls or Python installation required |
+| `npm test` | Run admission and child-process protocol/lifecycle tests; requires Node.js only and makes no AI calls |
+| `npm run test:python` | Run real Python integration tests, including simultaneous documents, image-only PDF pages, and HTTP processing |
+| `npm run check:python` | Check the configured Python process and print a safe preparation summary |
+
+For `test:python`, configure Python in `.env` or `PYTHON_COMMAND`; if neither is set, the tests detect a local `.venv` before falling back to `python`. Production and `check:python` use the configured command directly.
 
 ### Project Structure
 
@@ -161,9 +182,11 @@ src/
   routes/ocr.routes.js         # Authenticated OCR admission route
   errors/api-error.js          # Safe API error envelope
   middleware/                  # Service authentication and error responses
-  services/document-processing/ # Explicit pending-pipeline boundary; tasks 6–7
+  services/document-processing/ # Python subprocess adapter and pending AI boundary
   services/ai/                 # Reserved for task 8
-  validators/                  # JSON/Base64/file checks; field validators in task 9
+  validators/                  # Request/file/prepared-PNG checks; field validators in task 9
+scripts/
+  check-python.js              # Actual Node.js → Python smoke check
 python/
   requirements.txt             # PyMuPDF, OpenCV headless, Pillow, NumPy
   preprocessing.py             # In-memory rendering and image preparation
@@ -175,6 +198,8 @@ examples/
   document-profile-cases.json   # Synthetic expected-result cases
 tests/
   request-handling.test.js      # HTTP admission and rejected-input checks
+  python-preprocessor.test.js  # Process failures, output validation, deadlines and cancellation
+  python-integration.test.js   # Real Python and HTTP integration
   fixtures/encrypted-pdf.json   # Synthetic password-protected PDF
 ```
 
@@ -251,4 +276,4 @@ See [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md) for field types, normalization,
 
 ## Next Step
 
-The next development step is task 7 of [OCR_TASKS.md](OCR_TASKS.md): invoke Python from Node.js, pass bytes through stdin, validate output, enforce timeouts, and handle process failures. Task 8 adds GPT extraction. Anonymized examples of real certificate/order layouts become useful for extraction tuning in tasks 8–10.
+The next development step is task 8 of [OCR_TASKS.md](OCR_TASKS.md): integrate a vision-capable GPT model with structured output and a replaceable test client. Anonymized examples of real certificate/order layouts become useful now for extraction tuning in tasks 8–10.

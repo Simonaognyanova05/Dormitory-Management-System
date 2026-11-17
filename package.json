@@ -11,8 +11,10 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "check": "node --check src/server.js && node --check src/app.js && node --check src/config/env.js && node --check src/config/document-types.js && node --check src/errors/api-error.js && node --check src/routes/health.routes.js && node --check src/routes/ocr.routes.js && node --check src/middleware/service-auth.js && node --check src/middleware/not-found.js && node --check src/middleware/error-handler.js && node --check src/validators/process-request.js && node --check src/validators/document-file.js && node --check src/services/document-processing/process-document.js",
-    "test": "node --test"
+    "check": "node --check src/server.js && node --check src/app.js && node --check src/config/env.js && node --check src/config/document-types.js && node --check src/errors/api-error.js && node --check src/routes/health.routes.js && node --check src/routes/ocr.routes.js && node --check src/middleware/service-auth.js && node --check src/middleware/not-found.js && node --check src/middleware/error-handler.js && node --check src/validators/process-request.js && node --check src/validators/document-file.js && node --check src/validators/prepared-document.js && node --check src/services/document-processing/process-document.js && node --check src/services/document-processing/python-preprocessor.js && node --check scripts/check-python.js",
+    "test": "node --test tests/request-handling.test.js tests/python-preprocessor.test.js",
+    "test:python": "node --test tests/python-integration.test.js",
+    "check:python": "node scripts/check-python.js"
   },
   "dependencies": {
     "dotenv": "^17.2.3",

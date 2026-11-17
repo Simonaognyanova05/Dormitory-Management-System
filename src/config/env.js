@@ -7,6 +7,8 @@ const DEFAULTS = Object.freeze({
   maxPdfPages: 3,
   maxImagePixels: 20_000_000,
   processingTimeoutMs: 40_000,
+  maxPreprocessStdoutBytes: 64 * 1024 * 1024,
+  maxPreprocessStderrBytes: 64 * 1024,
 });
 
 function integerSetting(env, name, fallback, maximum) {
@@ -62,6 +64,8 @@ function loadConfig(env = process.env) {
       maxPdfPages: integerSetting(env, 'MAX_PDF_PAGES', DEFAULTS.maxPdfPages, DEFAULTS.maxPdfPages),
       maxImagePixels: integerSetting(env, 'MAX_IMAGE_PIXELS', DEFAULTS.maxImagePixels, DEFAULTS.maxImagePixels),
       processingTimeoutMs: integerSetting(env, 'PROCESSING_TIMEOUT_MS', DEFAULTS.processingTimeoutMs, DEFAULTS.processingTimeoutMs),
+      maxPreprocessStdoutBytes: integerSetting(env, 'MAX_PREPROCESS_STDOUT_BYTES', DEFAULTS.maxPreprocessStdoutBytes, DEFAULTS.maxPreprocessStdoutBytes),
+      maxPreprocessStderrBytes: integerSetting(env, 'MAX_PREPROCESS_STDERR_BYTES', DEFAULTS.maxPreprocessStderrBytes, DEFAULTS.maxPreprocessStderrBytes),
     }),
   });
 }

@@ -3,7 +3,7 @@
   "info": {
     "title": "Dormitory OCR Microservice",
     "version": "1.0.0-draft",
-    "description": "GET /health and authenticated request/file validation are implemented. Admission currently enables student_certificate only; valid inputs return 503 processing_not_configured while extraction is pending. Other types return 422. See OCR_API_CONTRACT.md and DOCUMENT_PROFILES.md for the intended full contract; team acceptance is pending."
+    "description": "GET /health, authenticated admission and real Node.js-to-Python preparation are implemented. Only student_certificate is currently enabled. After preparation, inputs return 503 processing_not_configured at stage extraction until GPT is integrated; Python startup failures use stage preprocessing. Other document types return 422. See OCR_API_CONTRACT.md and DOCUMENT_PROFILES.md; team acceptance is pending."
   },
   "servers": [{"url": "http://localhost:3000", "description": "Local development (once implemented)"}],
   "security": [{"ServiceToken": []}],
@@ -12,7 +12,7 @@
       "post": {
         "operationId": "processDocument",
         "summary": "Extract reviewable fields from one document",
-        "description": "Task 5 implements authentication and admission: 10 MiB decoded file, 14 MiB JSON, 3 PDF pages, and 20 million image pixels. Only student_certificate is currently enabled; valid inputs return 503 processing_not_configured until extraction is implemented. Future complete/partial results use HTTP 200. Medical/disabled types are rejected before decoding. Use uncompressed UTF-8 JSON; multipart is not supported.",
+        "description": "Authentication, admission and Python preprocessing are implemented: 10 MiB decoded file, 14 MiB JSON, 3 PDF pages, 20 million input image pixels. Python receives bytes via stdin; output is bounded and validated under the processing deadline. Only student_certificate is enabled; prepared inputs return 503 processing_not_configured at stage extraction until GPT is integrated. Future complete/partial results use HTTP 200. Medical/disabled types are rejected before decoding. Use uncompressed UTF-8 JSON; multipart is not supported.",
         "requestBody": {
           "required": true,
           "content": {
@@ -255,7 +255,7 @@
         "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "unsupported_document_type", "message": "This document type cannot be processed.", "retryable": false, "details": {"field": "documentType"}}}}}
       },
       "InternalError": {
-        "description": "internal_error; investigate instead of blindly retrying.",
+        "description": "internal_error, including malformed Python output, stream errors or exceeded child-output limits; investigate instead of blindly retrying.",
         "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "internal_error", "message": "An internal processing error occurred.", "retryable": false, "details": {}}}}}
       },
       "ProviderError": {
@@ -263,9 +263,10 @@
         "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "provider_bad_response", "message": "AI returned an invalid extraction response.", "retryable": true, "details": {}}}}}
       },
       "Unavailable": {
-        "description": "provider_unavailable is retryable; service_not_configured, provider_configuration_error and processing_not_configured are not. Valid task-5 requests currently reach the pending-processing response shown here.",
+        "description": "provider_unavailable is retryable; service_not_configured, provider_configuration_error and processing_not_configured are not. The current pipeline distinguishes Python startup failure from successful preparation followed by pending AI extraction.",
         "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "examples": {
-          "pendingProcessing": {"summary": "Current response after successful request/file validation", "value": {"error": {"code": "processing_not_configured", "message": "Request and file are valid, but OCR processing is not implemented yet.", "retryable": false, "details": {}}}},
+          "pendingProcessing": {"summary": "Current response after real Python preparation", "value": {"error": {"code": "processing_not_configured", "message": "Document prepared successfully, but AI extraction is not implemented yet.", "retryable": false, "details": {"stage": "extraction", "pageCount": 1}}}},
+          "pythonUnavailable": {"summary": "Python executable/script/dependencies could not start", "value": {"error": {"code": "processing_not_configured", "message": "Could not start Python preprocessing. Check PYTHON_COMMAND, the script and installed dependencies.", "retryable": false, "details": {"stage": "preprocessing"}}}},
           "providerUnavailable": {"summary": "Future transient AI failure", "value": {"error": {"code": "provider_unavailable", "message": "The AI provider is temporarily unavailable.", "retryable": true, "details": {}}}}
         }}}
       },
