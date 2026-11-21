@@ -94,6 +94,8 @@ The public response includes **`mock_result`**, `status: "partial"`, `requiresMa
 
 **Still pending:** a real-provider smoke test with a configured key/model and a readable certificate, followed by comparison with known values. Anonymized real layouts or real forms filled with synthetic data are useful here. These integration checks do not establish the 90% accuracy target.
 
+The [early evaluator](../../../EVALUATION.md) now provides a 12-document Bulgarian corpus, fixed comparison rules and stage timing reports for that follow-up. It requires real mode and rejects `mock_result`; local provider fixtures test the evaluator only, not recognition quality.
+
 Provider references:
 
 - [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs)

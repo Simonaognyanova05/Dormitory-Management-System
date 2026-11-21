@@ -213,8 +213,31 @@ Request/file/page/pixel limits are enforced during admission and passed to Pytho
 | `npm test` | Run admission, child-process and AI client tests with local/injected provider responses; no paid AI calls |
 | `npm run test:python` | Run real Python integration tests, including the HTTP pipeline with explicit mock extraction |
 | `npm run check:python` | Check the configured Python process and print a safe preparation summary |
+| `npm run evaluate -- --dataset <file> --validate-only` | Validate a 10+ document dataset without provider calls |
+| `npm run evaluate -- --dataset <file> --output-dir <new folder>` | Measure real-provider extraction and write JSON/Markdown reports |
 
 For `test:python`, configure Python in `.env` or `PYTHON_COMMAND`; if neither is set, the tests detect a local `.venv` before falling back to `python`. Production and `check:python` use the configured command directly.
+
+### Early Accuracy and Timing Evaluation
+
+Generate 12 distinct Bulgarian synthetic certificates and their known field values:
+
+```powershell
+.\.venv\Scripts\python.exe python/generate_benchmark_dataset.py
+npm run evaluate -- --dataset tmp/benchmark-certificates/dataset.json --validate-only
+```
+
+The corpus has clean/tilted/faded/noisy/reduced-resolution/EXIF image variants, text/scanned/two-page PDFs, and genuine missing-field controls. Validation checks all files and annotations without AI calls.
+
+After configuring a real model/key, run:
+
+```powershell
+npm run evaluate -- --dataset tmp/benchmark-certificates/dataset.json --output-dir tmp/early-evaluation-001
+```
+
+This uses the actual admission/Python/AI/field-validation code sequentially and can incur provider charges. Mock mode/results are rejected for measurement. Reports compare returned values with ground truth and record per-field errors, preprocessing/AI/validation/overall times, median/p95, failures and coverage. A completed extraction is not automatically a correct value match.
+
+See **[EVALUATION.md](EVALUATION.md)** for comparison/null rules, timing boundaries, report contents, interruption, and adding real layouts. Tooling and corpus validation are verified; real-provider accuracy/timing measurements are still pending. This early certificate-only set does not replace final 30-document acceptance.
 
 ### Project Structure
 
@@ -230,13 +253,17 @@ src/
   services/document-processing/ # Python → AI orchestration and shared deadline
   services/ai/                 # GPT client, strict schema, mock and response mapping
   validators/                  # Request/file/PNG/model-shape and certificate-field checks
+  evaluation/                 # Dataset validation, scoring and measurement reports
 scripts/
   check-python.js              # Actual Node.js → Python smoke check
+  evaluate.js                  # Validation-only or real-provider evaluation CLI
+  check-syntax.js              # Syntax checks for all Node.js source/tests
 python/
   requirements.txt             # PyMuPDF, OpenCV headless, Pillow, NumPy
   preprocessing.py             # In-memory rendering and image preparation
   preprocess.py                # Standalone CLI/raw-stdin entry point
   generate_demo_documents.py   # Synthetic manual-test inputs
+  generate_benchmark_dataset.py # 12 Bulgarian samples and canonical ground truth
   tests/test_preprocessing.py  # Rendering, geometry, quality and CLI checks
   README.md                    # Python setup and preprocessing boundary
 examples/
@@ -247,6 +274,7 @@ tests/
   python-integration.test.js   # Real Python and HTTP integration
   ai-extraction.test.js        # Provider protocol, errors, deadlines, mock and HTTP extraction
   certificate-fields.test.js   # Golden certificate cases and semantic/Unicode/status checks
+  evaluation.test.js           # Scoring, failure coverage, CLI reports and timing checks
   fixtures/encrypted-pdf.json   # Synthetic password-protected PDF
 ```
 
@@ -323,4 +351,4 @@ See [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md) for field types, normalization,
 
 ## Next Step
 
-Configure the real provider and verify a readable certificate to finish task 8's live acceptance check. Next is task 10 of [OCR_TASKS.md](OCR_TASKS.md): early time/quality measurements on at least 10 sample documents with known values. Use real extraction rather than mock when measuring recognition quality.
+Run the real-provider evaluation in [EVALUATION.md](EVALUATION.md) to finish task 8's smoke check and task 10's initial measurements, then use the observed errors to select improvements. The evaluator and 12-document corpus are ready; no real recognition score is claimed yet.

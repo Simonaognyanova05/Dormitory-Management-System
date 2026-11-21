@@ -142,16 +142,19 @@ My service receives a document from the monolith, prepares it, extracts its fiel
 - [x] Keep format validity separate from recognition accuracy; return no invented confidence score and require human confirmation in the monolith.
 - [x] Return useful partial results and null values for manual entry; mock results always remain partial with `mock_result`.
 
-**Deliverables:** [certificate-fields.js](src/validators/certificate-fields.js), updated response classification and [certificate tests](tests/certificate-fields.test.js). All **60 Node.js tests** and **4 real Python integration tests** pass, including the six certificate raw-field fixtures, Unicode/boundary cases, complete real-provider-fixture responses and explicitly partial mock results. Placement-order and optional profiles remain for their later tasks; the real-provider smoke/accuracy checks are still pending.
+**Deliverables:** [certificate-fields.js](src/validators/certificate-fields.js), updated response classification and [certificate tests](tests/certificate-fields.test.js). The regression coverage includes six certificate raw-field fixtures, Unicode/boundary cases, local provider-fixture responses and explicitly partial mock results. Placement-order and optional profiles remain for their later tasks; the real-provider smoke/accuracy checks are still pending.
 
 **Done when:** a certificate completes the entire flow and the API returns a JSON result that can be reviewed against the original.
 
 ### 10. Check Performance and Quality Early
 
-- [ ] Try at least 10 sample/synthetic documents of varying quality.
-- [ ] Compare extracted fields with known expected values.
-- [ ] Measure preprocessing time, AI request time, and total time.
-- [ ] Adjust preprocessing, prompts, or the selected model as needed before adding other document types.
+- [x] Generate and validate a 12-document Bulgarian synthetic corpus with distinct known fields, varied formats/quality and absent-field controls.
+- [x] Implement independent, documented field comparison and JSON/Markdown reports with failures and incomplete coverage retained.
+- [x] Instrument admission, Python preparation, AI attempts/retries, field validation and total processing time; report median and p95.
+- [ ] Extract at least 10 sample/synthetic documents through a real configured provider and save the initial report.
+- [ ] Review actual mismatches and timing results; adjust preprocessing, prompts or the model based on measured evidence before adding other document types.
+
+**Deliverables:** [EVALUATION.md](EVALUATION.md), [benchmark generator](python/generate_benchmark_dataset.py), [manifest schema](examples/benchmark-manifest.schema.json), `npm run evaluate`, scoring/report modules and evaluator/generator tests. The generated corpus passes validation with **12 documents, 48 field slots, 46 known present values and 2 absences**, with no provider calls. Mock measurements are rejected. The tooling is ready; real-provider measurements and evidence-based tuning remain pending. This is not final 30-document acceptance.
 
 **Done when:** initial measurements are available and the errors requiring improvement are identified.
 

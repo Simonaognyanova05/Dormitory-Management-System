@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Early certificate evaluation dataset",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "datasetId", "synthetic", "documents"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "datasetId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "synthetic": {"type": "boolean"},
+    "description": {"type": "string"},
+    "language": {"type": "string"},
+    "documents": {
+      "type": "array", "minItems": 10,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "file", "mimeType", "documentType", "quality", "expectedFields"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+          "file": {"type": "string", "minLength": 1, "description": "Portable relative path using forward slashes, within the dataset folder; no dot/traversal segments."},
+          "mimeType": {"enum": ["application/pdf", "image/jpeg", "image/png"]},
+          "documentType": {"const": "student_certificate"},
+          "quality": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$"},
+          "expectedFields": {
+            "type": "object", "additionalProperties": false,
+            "required": ["fullName", "facultyNumber", "specialty", "yearOfStudy"],
+            "properties": {
+              "fullName": {"type": ["string", "null"], "minLength": 1},
+              "facultyNumber": {"type": ["string", "null"], "minLength": 1},
+              "specialty": {"type": ["string", "null"], "minLength": 1},
+              "yearOfStudy": {"type": ["integer", "null"], "description": "Canonical factual annotation; source out-of-range values can be scored independently of application validation."}
+            }
+          }
+        }
+      }
+    }
+  }
+}

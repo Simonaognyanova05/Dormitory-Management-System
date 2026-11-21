@@ -41,6 +41,8 @@ Existing demo files are not overwritten. Choose a different folder for another s
 .\.venv\Scripts\python.exe python/generate_demo_documents.py --output-dir tmp/demo-inputs-2
 ```
 
+For task 10, [generate_benchmark_dataset.py](generate_benchmark_dataset.py) creates a separate 12-document **Bulgarian** corpus with distinct ground-truth values, including absent fields and multi-page/image-only PDFs. Its bundled font supports Cyrillic without a system-font dependency. See [EVALUATION.md](../EVALUATION.md) for generation, annotation and measurement commands; these files are not the same as the eight English preprocessing demos.
+
 ## Prepare a File and Inspect the Result
 
 ```powershell
