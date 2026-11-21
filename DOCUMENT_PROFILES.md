@@ -6,7 +6,7 @@
 
 These are implementation profiles, not eligibility or admission rules. The faculty-number format, study-year range, phone rules, and optional-document fields below are working assumptions based on the architecture document; institution-specific confirmation is still pending.
 
-**Task 8 status:** the certificate's provider schema and structural output validation are implemented. Complete field normalization and semantic validation below are implemented in task 9. Until then, all HTTP extraction results carry `field_validation_pending` and remain `partial`; mock values additionally carry `mock_result`. See [AI client details](src/services/ai/README.md).
+**Implementation status:** the certificate profile has provider-schema checks, NFC/whitespace normalization, semantic field validation, and completed/partial classification. Mock values remain partial with `mock_result`; type mismatches and field issues also require review. Placement-order and optional-profile rules below are still specifications for later tasks. See [certificate-fields.js](src/validators/certificate-fields.js) and [AI client details](src/services/ai/README.md).
 
 ## 1. Profile Registry
 
@@ -54,6 +54,8 @@ Apply these rules to extracted candidates, not to the uploaded bytes or the call
 
 Calendar rules, character classes, and study-year checks are **semantic validators**. The OpenAPI schemas describe the response's structural types and allow invalid candidates in partial results; they do not replace these checks.
 
+The certificate normalizer accepts defensive raw candidates for deterministic field tests. The live provider contract remains stricter: for example, numeric faculty IDs or Roman strings in the provider's integer-only year slot violate its JSON Schema and are rejected before normalization. Missing keys, extra properties, or wrong provider types remain structural `provider_bad_response` errors. Do not confuse raw-candidate fixtures with accepted provider/API payloads.
+
 ### Response Classification
 
 - Same detected/requested type, all fields valid and present, no uncertainty or warnings: `completed`, empty `fieldIssues`, empty `warnings`, `requiresManualReview: false`.
@@ -74,7 +76,7 @@ Calendar rules, character classes, and study-year checks are **semantic validato
 | `fullName` | string or `null` | Student's name; e.g. `Име`, `Имена`, `Студент` | Shared text rules; nonempty, up to 200 code points. Do not require exactly three names or infer missing names. |
 | `facultyNumber` | string or `null` | Faculty identifier; e.g. `Факултетен номер`, `Фак. №`, `ФН` | NFC + surrounding trim only; **5–12 Unicode letters or ASCII digits**, with no internal spaces, punctuation, or separators. Preserve leading zeros and case. This is a working format assumption. |
 | `specialty` | string or `null` | Degree specialty; e.g. `Специалност` | Shared text rules; nonempty, up to 200 code points. Do not substitute the faculty name or guess a specialty from an abbreviation. |
-| `yearOfStudy` | integer or `null` | Year of study; e.g. `Курс` | Accept an integer, an exact signed decimal integer string, or a Roman numeral `I`–`VI` (case-insensitive) as an unambiguous candidate. Normalize to an integer and validate **1–6**. No booleans, fractions, ranges, ordinal suffixes, semester-to-year calculations, or guessing. The range is a working assumption. |
+| `yearOfStudy` | integer or `null` | Year of study; e.g. `Курс` | Accept a safe integer, an exact signed decimal integer string, or an ASCII Roman numeral `I`–`VI` (case-insensitive) as an unambiguous raw candidate. Normalize to an integer and validate **1–6**. No booleans, fractions, ranges, ordinal suffixes, semester-to-year calculations, or guessing. Unsafe or overlong numeric strings become `null` with `invalid_format`; do not round them. The range is a working assumption. |
 
 For example, `"II"` becomes `2`; `"9"` becomes `9` with `invalid_format`; `"2/3"` becomes `null` with `invalid_format`. A numeric faculty identifier becomes `null` with `invalid_format` rather than being padded or converted.
 
@@ -133,7 +135,7 @@ Do not infer missing address values from a postcode or decide eligibility based 
 | `placement_order_invalid_date` | Retain an impossible date with `invalid_format`. |
 | `medical_declared_rejected` | Reject based on the declared type, without source processing or an AI call. |
 
-`rawFields` and `uncertainFields` are illustrative inputs to the future validator, not a finalized AI-provider payload or an API request. Source snippets are plain text, not uploaded PDF/image fixtures. These examples are for profile design and future deterministic tests; they do not demonstrate implemented OCR or count toward the 30-document accuracy benchmark.
+`rawFields` and `uncertainFields` are raw normalizer inputs, not an AI-provider payload or an API request. [Certificate tests](tests/certificate-fields.test.js) verify the six certificate cases' exact normalized fields and issues. Placement-order examples remain for task 12. Source snippets are plain text, not PDF/image fixtures; none of these deterministic checks counts toward the 30-document recognition benchmark.
 
 ## 8. Items to Confirm with the Team
 
@@ -142,4 +144,4 @@ Do not infer missing address values from a postcode or decide eligibility based 
 - [ ] Confirm when placement orders enter the workflow and how multi-student orders should identify their target.
 - [ ] Confirm the optional form/address field sets and the phone-number assumptions before implementing them.
 
-The profile definitions and examples are ready for implementation. The items above remain explicitly open rather than being represented as approved university rules.
+The certificate profile is implemented using the documented working assumptions. The team-confirmation items above remain explicitly open rather than being represented as approved university rules.

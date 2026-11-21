@@ -200,6 +200,14 @@ test('shared deadlines expire without resetting the budget or issuing a provider
   });
   await assert.rejects(processor({ documentType: 'student_certificate' }), safeError(504, 'processing_timeout'));
   assert.equal(calls, 0);
+  const slowClient = createDocumentProcessor(configuration({ PROCESSING_TIMEOUT_MS: '1' }), {
+    prepare: async () => prepared(),
+    client: { mode: 'openai', assertConfigured() {}, extract: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return extraction();
+    } },
+  });
+  await assert.rejects(slowClient({ documentId: 'deadline-test', documentType: 'student_certificate' }), safeError(504, 'processing_timeout'));
 });
 
 test('a live provider with stalled response body is aborted and times out within the shared budget', async (t) => {
@@ -212,7 +220,7 @@ test('a live provider with stalled response body is aborted and times out within
   await assert.rejects(createGptVisionClient(config).extract(prepared(), 'student_certificate', context(config)), safeError(504, 'provider_timeout'));
 });
 
-test('builds partial reviewable output with missing/uncertain fields and no premature completion', () => {
+test('builds partial reviewable output with missing, uncertain and semantically invalid fields', () => {
   const value = extraction();
   value.fields.specialty = '  ';
   value.fields.yearOfStudy = 9;
@@ -224,7 +232,8 @@ test('builds partial reviewable output with missing/uncertain fields and no prem
   assert.equal(response.fields.yearOfStudy, 9);
   assert.ok(response.fieldIssues.some((issue) => issue.field === 'specialty' && issue.code === 'missing'));
   assert.ok(response.fieldIssues.some((issue) => issue.field === 'facultyNumber' && issue.code === 'uncertain'));
-  assert.deepEqual(response.warnings, ['field_validation_pending']);
+  assert.ok(response.fieldIssues.some((issue) => issue.field === 'yearOfStudy' && issue.code === 'invalid_format'));
+  assert.deepEqual(response.warnings, []);
 });
 
 test('unreadable and medical documents return actionable errors, while type mismatch stays reviewable', () => {
@@ -243,7 +252,7 @@ test('explicit mock mode is credential-free, fixed, isolated and unmistakably ma
   const next = await client.extract(prepared(), 'student_certificate', context(config));
   assert.equal(next.fields.facultyNumber, '001234567');
   const response = buildExtractionResponse({ documentId: 'doc-mock', documentType: 'student_certificate' }, next, { mock: true });
-  assert.deepEqual(response.warnings, ['mock_result', 'field_validation_pending']);
+  assert.deepEqual(response.warnings, ['mock_result']);
   assert.equal(response.requiresManualReview, true);
 });
 
@@ -273,7 +282,9 @@ test('the HTTP pipeline uses the actual HTTP adapter and returns schema-shaped e
   const result = await response.json();
   assert.equal(result.documentId, 'private-document-id');
   assert.equal(result.fields.facultyNumber, '001234567');
-  assert.deepEqual(result.warnings, ['field_validation_pending']);
+  assert.equal(result.status, 'completed');
+  assert.equal(result.requiresManualReview, false);
+  assert.deepEqual(result.warnings, []);
   assert.equal(providerCalls, 1);
 });
 

@@ -2,7 +2,7 @@
 
 Task 6 implements standalone preparation of **PDF, scanned PDF, JPG, and PNG** inputs. This is image preprocessing, not OCR: no text fields are extracted and no AI service is called.
 
-Node.js invokes this entry point through `child_process.spawn()` for valid requests, then passes the prepared pages to the configured real or mock vision client. Successful HTTP extraction remains reviewable and `partial` until task 9's semantic field validation. Python-only commands still make no AI calls.
+Node.js invokes this entry point through `child_process.spawn()` for valid requests, then passes the prepared pages to the configured real or mock vision client. The certificate's semantic validator classifies the HTTP result as completed or partial; mock extraction is always partial and labeled. Python-only commands still make no AI calls.
 
 ## Environment
 

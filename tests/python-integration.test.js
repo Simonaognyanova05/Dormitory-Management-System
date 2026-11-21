@@ -67,7 +67,7 @@ test('the live HTTP pipeline prepares images and returns explicitly marked mock 
   assert.equal(response.headers.get('x-ocr-ai-provider'), 'mock');
   const result = await response.json();
   assert.equal(result.fields.facultyNumber, '001234567');
-  assert.deepEqual(result.warnings, ['mock_result', 'field_validation_pending']);
+  assert.deepEqual(result.warnings, ['mock_result']);
   assert.equal(result.status, 'partial');
   assert.equal(result.requiresManualReview, true);
 });

@@ -8,8 +8,9 @@ Task 8 adds a real **OpenAI-compatible Chat Completions** adapter and an explici
 - `gpt-vision.js`: native `fetch` transport, bounded response reading, provider errors, deadlines, cancellation, and at most one retry.
 - `mock-vision.js`: fresh fixed synthetic values for every request; it never reads the document or calls an API.
 - `client.js`: selects the provider from `AI_PROVIDER`; no automatic fallback to mock.
-- `extraction-response.js`: maps structurally valid extraction into the public response with missing/uncertain fields and review warnings.
+- `extraction-response.js`: normalizes/validates certificate values and classifies completed/partial results with review issues/warnings.
 - [ai-extraction.js](../../validators/ai-extraction.js): runtime validation of the provider's internal JSON shape.
+- [certificate-fields.js](../../validators/certificate-fields.js): semantic certificate-field normalization and validation.
 
 ## Real Provider Configuration
 
@@ -57,11 +58,15 @@ All properties are required, and extra properties/wrong types are rejected. `fie
 
 `readable: false` becomes `422 unreadable_document`; a medical detection becomes `422 unsupported_document_type`. A different/unknown detected type returns a reviewable result with `document_type_mismatch`. Provider refusal is a non-retryable `502 provider_request_rejected`, not invented data.
 
-## Review State Until Task 9
+## Field Validation and Review State
 
-The provider schema verifies JSON structure, not the correctness of recognized values. Task 9 implements the complete normalization and semantic field rules from [DOCUMENT_PROFILES.md](../../../DOCUMENT_PROFILES.md).
+The provider schema verifies JSON structure, not the correctness of recognized values. [The semantic normalizer](../../validators/certificate-fields.js) applies the certificate rules from [DOCUMENT_PROFILES.md](../../../DOCUMENT_PROFILES.md): NFC/whitespace normalization, string identifiers with preserved leading zeros, the working 5–12 letter/digit faculty-number format, a 200-code-point text limit, and study years 1–6.
 
-Until then, every successful extraction returns HTTP **200**, `status: "partial"`, `requiresManualReview: true`, and the warning **`field_validation_pending`**. Absent/blank values become `null` with `missing`; ambiguous values have `uncertain` issues. Out-of-range but type-correct candidates can remain visible for review. No response is labeled `completed` prematurely.
+Successful extraction returns HTTP **200**. If all values pass the semantic rules, the type matches and no issues/warnings remain, the response is `completed` with `requiresManualReview: false`. Missing, invalid, uncertain or mismatched data remains `partial`. Mock mode always remains partial. The temporary validation-pending warning is no longer emitted.
+
+Absent/blank values become `null` with `missing`. Type-correct invalid values (such as integer year `9`) are retained with `invalid_format`; wrong raw candidate types become `null` rather than guessed strings. `uncertain` is an independent issue and can coexist with another field problem. Issues describe the required action without including candidate values. Semantic problems do not trigger provider retries.
+
+The provider's strict schema is still enforced first. Defensive normalizer tests with Roman strings, missing keys or numeric identifiers do not imply that nonconforming provider JSON is accepted. Completed format checks do not prove recognition accuracy or bypass the user's confirmation in the monolith.
 
 ## Mock Mode
 
@@ -71,7 +76,7 @@ AI_PROVIDER=mock
 
 Restart after changing `.env`. This mode requires no AI key/model and makes no provider requests. It still performs real admission and Python image preparation. It returns the same fixed synthetic certificate fields for **any valid image, including a blank one**, so it is not OCR and cannot be used for accuracy evaluation.
 
-The public response includes **`mock_result`** and `field_validation_pending` warnings, and `X-OCR-AI-Provider: mock`. Real mode uses the `openai` header value. Selecting mock is explicit; transport errors never silently turn into demonstration results.
+The public response includes **`mock_result`**, `status: "partial"`, `requiresManualReview: true`, and `X-OCR-AI-Provider: mock`, even when every synthetic value has a valid format. Real mode uses the `openai` header value. Selecting mock is explicit; transport errors never silently turn into demonstration results.
 
 ## Timeouts, Retries, and Error Handling
 

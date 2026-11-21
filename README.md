@@ -10,7 +10,7 @@ The service implements `GET /health` and authenticated request/file validation f
 
 Node.js invokes Python for valid requests, receives prepared PNG pages, and validates their metadata and decoded content. Each request has an isolated child process, bounded output, a processing deadline, and cancellation on client disconnect. No temporary files are written by the HTTP pipeline.
 
-GPT Vision extraction is implemented for the certificate profile, with a strict JSON Schema and an explicitly selected mock mode. Successful requests return HTTP **200** with extracted fields for review. Until task 9 adds full semantic validation, responses remain `partial` with `field_validation_pending`. Mock responses additionally carry `mock_result` and never represent actual recognition.
+GPT Vision extraction and semantic field validation are implemented for the certificate profile, with an explicitly selected mock mode. Successful requests return HTTP **200**: `completed` when all fields pass validation with no issues/warnings, or `partial` when manual attention is needed. Mock responses always carry `mock_result` and remain `partial`; they never represent actual recognition.
 
 The real HTTP adapter was tested against local provider fixtures; a real-provider smoke test and measured extraction quality remain pending a configured key/model and sample documents.
 
@@ -86,7 +86,7 @@ This is a valid **blank 1×1 PNG**, not a student document. Mock mode returns HT
     "yearOfStudy": 2
   },
   "fieldIssues": [],
-  "warnings": ["mock_result", "field_validation_pending"],
+  "warnings": ["mock_result"],
   "requiresManualReview": true
 }
 ```
@@ -107,9 +107,21 @@ OPENAI_TEMPERATURE=0
 
 The model is a configurable starting example; it must support image inputs and strict JSON Schema via Chat Completions. Leave temperature empty for models that do not support it. Restart the server, use a **readable certificate** instead of the blank PNG, and prepare its JSON body using the PowerShell instructions in [OCR_API_CONTRACT.md](OCR_API_CONTRACT.md).
 
-Real mode sends prepared images to the configured provider and can incur API charges. It never falls back to mock. Missing credentials/model return `503 provider_configuration_error` before Python starts. The response header is `X-OCR-AI-Provider: openai`; actual extracted values still require review and carry `field_validation_pending` until task 9.
+Real mode sends prepared images to the configured provider and can incur API charges. It never falls back to mock. Missing credentials/model return `503 provider_configuration_error` before Python starts. The response header is `X-OCR-AI-Provider: openai`. The response now applies certificate-field normalization and validation; the temporary validation-pending warning has been removed.
 
 For this live check, use anonymized certificate layouts or forms filled with known synthetic values and compare the four returned fields to the source. A real-provider call has not been verified in this coding session. Full configuration, provider protocol and retry behavior are documented in [src/services/ai/README.md](src/services/ai/README.md).
+
+### Field Normalization and Review Status
+
+- Names and specialties use Unicode NFC, surrounding trim, and collapsed whitespace, without translation or spelling changes; up to 200 Unicode code points.
+- Faculty numbers remain strings with leading zeros. The working rule is 5–12 Unicode letters or ASCII digits; internal separators are retained and flagged rather than silently removed.
+- Study years must be integers from 1 to 6. The defensive field normalizer also accepts exact integer strings and ASCII Roman `I`–`VI`; it never infers a year from a semester or repairs an ambiguous value.
+- Missing values become `null` with `missing`. Invalid candidates get `invalid_format`; type-correct candidates such as year `9` remain visible for correction. Model uncertainty is preserved separately as `uncertain`.
+- `completed` means all automatic field checks passed, the detected type matches, and there are no issues/warnings. Missing/invalid/uncertain data, a type mismatch, or mock mode gives `partial` and `requiresManualReview: true`.
+
+**A valid format is not proof of correct recognition.** Even a `completed` result still requires user confirmation against the original in the main application; this service does not approve applications. Field problems are returned as HTTP 200 partial data, allowing manual entry without another AI request.
+
+See [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md) for the working rules. Placement-order and optional-document semantics remain for their later implementation steps. Structural provider-schema errors still return `provider_bad_response`; defensive raw-value tests do not relax that schema.
 
 | Test change | Expected response |
 | --- | --- |
@@ -217,7 +229,7 @@ src/
   middleware/                  # Service authentication and error responses
   services/document-processing/ # Python → AI orchestration and shared deadline
   services/ai/                 # GPT client, strict schema, mock and response mapping
-  validators/                  # Request/file/PNG/model-shape checks; semantic rules in task 9
+  validators/                  # Request/file/PNG/model-shape and certificate-field checks
 scripts/
   check-python.js              # Actual Node.js → Python smoke check
 python/
@@ -234,6 +246,7 @@ tests/
   python-preprocessor.test.js  # Process failures, output validation, deadlines and cancellation
   python-integration.test.js   # Real Python and HTTP integration
   ai-extraction.test.js        # Provider protocol, errors, deadlines, mock and HTTP extraction
+  certificate-fields.test.js   # Golden certificate cases and semantic/Unicode/status checks
   fixtures/encrypted-pdf.json   # Synthetic password-protected PDF
 ```
 
@@ -310,4 +323,4 @@ See [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md) for field types, normalization,
 
 ## Next Step
 
-Configure the real provider and verify a readable certificate to finish task 8's live acceptance check. The next implementation step is task 9 of [OCR_TASKS.md](OCR_TASKS.md): full field normalization, semantic validation and removal of `field_validation_pending` once those rules are active.
+Configure the real provider and verify a readable certificate to finish task 8's live acceptance check. Next is task 10 of [OCR_TASKS.md](OCR_TASKS.md): early time/quality measurements on at least 10 sample documents with known values. Use real extraction rather than mock when measuring recognition quality.

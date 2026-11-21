@@ -4,7 +4,7 @@
 **Status:** proposed contract for the OCR branch; acceptance by the monolith developer is pending.  
 **Machine-readable definition:** [openapi.json](openapi.json), importable into Postman.
 
-This document defines the extraction API. Authentication, file admission, Python preparation, and GPT Vision integration are implemented for `student_certificate`. Explicit mock mode supports cost-free pipeline demonstrations. Successful extraction returns HTTP 200 with reviewable fields; until task 9, all such responses are `partial` with `field_validation_pending`. Real-provider acceptance/accuracy checks remain pending. Python startup failures are `503 processing_not_configured`; missing AI credentials/model are `503 provider_configuration_error`. Other document types remain disabled and return `422 unsupported_document_type`.
+This document defines the extraction API. Authentication, file admission, Python preparation, GPT Vision integration and semantic certificate-field validation are implemented for `student_certificate`. Successful extraction returns HTTP 200 with `completed` or `partial` according to field issues and warnings. Explicit mock mode always returns partial, labeled synthetic data. Real-provider acceptance/accuracy checks remain pending. Python startup failures are `503 processing_not_configured`; missing AI credentials/model are `503 provider_configuration_error`. Other document types remain disabled and return `422 unsupported_document_type`.
 
 Document-specific semantic rules are defined in [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md); [AI client documentation](src/services/ai/README.md) describes provider configuration and the internal schema.
 
@@ -96,7 +96,7 @@ For JPG/PNG, use the matching MIME type. The original filename and filesystem pa
 
 Both fully extracted and partial results return **HTTP 200**. A partial result is useful data, not a transport failure.
 
-Task 8 validates the model's JSON shape, maps missing/uncertain values, and returns `field_validation_pending` until the semantic rules in task 9 are active. `completed` remains part of the planned contract but is not emitted yet. See [README.md](README.md) for a current mock example and real-provider setup. Success responses include `X-OCR-AI-Provider: openai` or `mock`.
+The certificate response is built after structural provider checks, normalization and semantic field validation. `completed` requires present, valid, unambiguous values, matching document type and no warnings; otherwise return `partial`. See [README.md](README.md) for mock examples and real-provider setup. Success responses include `X-OCR-AI-Provider: openai` or `mock`.
 
 Every successful or partial response includes all keys for the requested document profile. Text fields are strings or `null`; `yearOfStudy` is an integer or `null`. IDs and room/order/faculty numbers remain strings so leading zeros and separators are preserved. `orderDate` is normalized to `YYYY-MM-DD` when valid; exact field-format and normalization rules are defined in [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md). Required response keys are not the same as required application values: missing source fields remain reviewable partial results, while the monolith controls submission requirements.
 
@@ -108,7 +108,7 @@ Every successful or partial response includes all keys for the requested documen
 | `status` | `completed` when there are no field issues or warnings; otherwise `partial` |
 | `fields` | Only the requested profile's fields; all profile keys must be present |
 | `fieldIssues` | Array of `{field, code, message}` objects identifying fields needing attention |
-| `warnings` | Array of document-level warning codes: `document_type_mismatch`, `field_validation_pending`, `mock_result` |
+| `warnings` | Array of document-level warning codes: `document_type_mismatch`, `mock_result` |
 | `requiresManualReview` | `true` for `partial`, `false` for `completed`; a signal that additional attention is needed, not administrative approval |
 
 Field issue codes:
@@ -119,18 +119,18 @@ Field issue codes:
 
 Each `fieldIssues[].field` must name a field in the requested profile. Every `null` field must have an issue. A field can have more than one issue. Remove fields not in the requested profile.
 
-Current-stage warnings:
+Document-level warnings:
 
-- `field_validation_pending`: JSON structure is checked, but complete normalization/format rules are pending task 9; keep values reviewable, including type-correct out-of-range candidates.
+- `document_type_mismatch`: the detected type differs from the requested type or is unknown; keep the requested profile and require review.
 - `mock_result`: values are fixed synthetic examples and are unrelated to the input's contents. Always require review and exclude these results from accuracy measurement.
 
-Both warnings force `partial` and `requiresManualReview: true`. A blank image in mock mode still yields synthetic values; a blank/unreadable image in real mode should be identified by the model and produce `422 unreadable_document`.
+Either warning forces `partial` and `requiresManualReview: true`. A blank image in mock mode still yields synthetic values; a blank/unreadable image in real mode should be identified by the model and produce `422 unreadable_document`. The temporary task-8 validation-pending marker is no longer emitted.
 
 If the detected type differs from the requested type or is `unknown`, return `document_type_mismatch`, `partial`, and `requiresManualReview: true`. Do not switch profiles silently. If the model identifies a medical document, discard the extraction and return `422 unsupported_document_type`; do not return medical content.
 
 `completed` means that all target values passed extraction checks. **The user still reviews and confirms them in the main application.** If readable text exists but none of the target fields is found, return a partial result with `null` values and issues. If the document itself is unreadable, return `422 unreadable_document`.
 
-### Complete Certificate Example (Planned After Semantic Validation)
+### Complete Certificate Example
 
 ```json
 {
@@ -173,7 +173,7 @@ Examples use synthetic values. Actual Bulgarian document values retain their ori
       "message": "Specialty was not found. Enter it manually."
     }
   ],
-  "warnings": ["field_validation_pending"],
+  "warnings": [],
   "requiresManualReview": true
 }
 ```
@@ -234,7 +234,7 @@ This is process liveness, not proof that Python, the AI provider, or credentials
 2. Configure `SERVICE_TOKEN`, Python, and `AI_PROVIDER` in `.env`; real mode also needs the AI key/model. Restart the service and use `http://127.0.0.1:3000` as the base URL.
 3. Open `POST /api/v1/ocr/process` and set API-key authentication to `X-Service-Token: <your-service-token>`; alternatively add that header directly.
 4. Set **Body → raw → JSON** and paste the body produced by the PowerShell example above.
-5. Send the request. In mock mode, expect fixed synthetic fields and `mock_result`. In real mode, use a readable certificate and compare the actual returned values with the source. `field_validation_pending` remains until task 9.
+5. Send the request. In mock mode, expect fixed synthetic fields and `mock_result`. In real mode, compare returned values with a readable certificate. Complete format checks return `completed`; missing/invalid/uncertain fields or a type mismatch return `partial`. Human confirmation remains necessary.
 6. Save requests for a complete result, missing-field result, invalid token, invalid Base64, unsupported type, and unreadable document.
 
 The OpenAPI request example contains a valid **1×1 blank PNG** to illustrate transport encoding. Replace it with an actual readable document before testing extraction. It is not a certificate or an accuracy-test fixture. Importing OpenAPI provides request/response documentation; it does not start an OCR server or simulate extraction.

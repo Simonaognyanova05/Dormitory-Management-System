@@ -129,18 +129,20 @@ My service receives a document from the monolith, prepares it, extracts its fiel
 - [x] Add an explicitly selected mock client with fixed synthetic data, a response header and a `mock_result` warning; never use it as an error fallback.
 - [ ] Verify one readable certificate through a real configured provider and compare returned fields with known source values.
 
-**Deliverables:** [AI client layer](src/services/ai/README.md), strict schema/prompt, OpenAI HTTP adapter, response mapping and shared-budget retries/cancellation. All **45 Node.js tests** and **4 real Python integration tests** passed using local provider fixtures or explicit mock mode. The paid-provider acceptance check above is pending credentials/model and sample input. Until task 9, HTTP results remain `partial` with `field_validation_pending`; no format-validation or OCR-accuracy success is claimed.
+**Deliverables:** [AI client layer](src/services/ai/README.md), strict schema/prompt, OpenAI HTTP adapter, response mapping and shared-budget retries/cancellation. Its tests use local provider fixtures or explicit mock mode. The paid-provider acceptance check above remains pending credentials/model and sample input. Task 9 now adds certificate-field normalization and completed/partial classification; recognition accuracy is still unmeasured.
 
 **Done when:** a real provider returns extracted values from a sample certificate.
 
 ### 9. Validate Fields and Return the Result
 
-- [ ] Accept only fields defined by the profile and check their data types.
-- [ ] Preserve faculty numbers as strings, including leading zeros.
-- [ ] Validate the faculty number format and year-of-study range according to the agreed rules.
-- [ ] Flag missing and invalid fields and set `requiresManualReview` according to the agreed rules.
-- [ ] Do not present a valid format as proof of correct recognition. If returning a confidence estimate, describe its source and limitations.
-- [ ] Return partial results for missing fields so the monolith can offer manual entry.
+- [x] Accept only own certificate-profile keys and check candidate types after the independent provider-schema check.
+- [x] Preserve string faculty numbers, leading zeros, alphabet and case; never guess lost digits or replace lookalike characters.
+- [x] Normalize NFC/whitespace and validate the working faculty-number, text-length and 1–6 study-year rules.
+- [x] Flag missing, invalid and uncertain fields; retain type-correct invalid candidates and classify completed/partial results consistently.
+- [x] Keep format validity separate from recognition accuracy; return no invented confidence score and require human confirmation in the monolith.
+- [x] Return useful partial results and null values for manual entry; mock results always remain partial with `mock_result`.
+
+**Deliverables:** [certificate-fields.js](src/validators/certificate-fields.js), updated response classification and [certificate tests](tests/certificate-fields.test.js). All **60 Node.js tests** and **4 real Python integration tests** pass, including the six certificate raw-field fixtures, Unicode/boundary cases, complete real-provider-fixture responses and explicitly partial mock results. Placement-order and optional profiles remain for their later tasks; the real-provider smoke/accuracy checks are still pending.
 
 **Done when:** a certificate completes the entire flow and the API returns a JSON result that can be reviewed against the original.
 

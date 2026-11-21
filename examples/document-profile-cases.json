@@ -1,7 +1,7 @@
 {
   "version": "1.0.0-draft",
   "synthetic": true,
-  "description": "Profile-design examples only. Source snippets are not PDF/image fixtures; rawFields/uncertainFields are illustrative validator inputs, not the public API or finalized provider contract.",
+  "description": "Synthetic raw-candidate fixtures: certificate normalized fields/issues are tested; placement-order cases are planned for later support. Source snippets are not PDF/image files, and rawFields/uncertainFields are not accepted public API or provider payloads.",
   "cases": [
     {
       "id": "certificate_complete",
@@ -62,7 +62,7 @@
       "expectedResponse": {
         "documentId": "certificate-004", "documentType": "student_certificate", "detectedDocumentType": "student_certificate", "status": "partial",
         "fields": {"fullName": "Иван Петров Иванов", "facultyNumber": "0012З4567", "specialty": "Компютърни системи и технологии", "yearOfStudy": 2},
-        "fieldIssues": [{"field": "facultyNumber", "code": "uncertain", "message": "Faculty number contains an ambiguous character. Check the original."}],
+        "fieldIssues": [{"field": "facultyNumber", "code": "uncertain", "message": "Faculty number could not be read reliably. Check the original."}],
         "warnings": [], "requiresManualReview": true
       }
     },

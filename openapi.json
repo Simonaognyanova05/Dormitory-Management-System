@@ -3,7 +3,7 @@
   "info": {
     "title": "Dormitory OCR Microservice",
     "version": "1.0.0-draft",
-    "description": "Admission, Python preparation and GPT Vision integration are implemented for student_certificate. Explicit mock mode returns fixed synthetic values marked mock_result. Until semantic validation in task 9, HTTP 200 extraction results are partial with field_validation_pending. Real-provider acceptance and quality measurements remain pending. See OCR_API_CONTRACT.md and DOCUMENT_PROFILES.md."
+    "description": "Admission, Python preparation, GPT Vision and semantic field validation are implemented for student_certificate. HTTP 200 results are completed only when all values pass checks with no issues/warnings; otherwise partial. Mock data is always partial and marked mock_result. Real-provider acceptance and recognition-quality measurements remain pending."
   },
   "servers": [{"url": "http://127.0.0.1:3000", "description": "Local development"}],
   "security": [{"ServiceToken": []}],
@@ -12,7 +12,7 @@
       "post": {
         "operationId": "processDocument",
         "summary": "Extract reviewable fields from one document",
-        "description": "Authenticated JSON/Base64 admission, Python preparation and configured OpenAI/mock extraction. Only student_certificate is enabled. Current HTTP 200 results are partial with field_validation_pending; mock results additionally carry mock_result. Missing real-provider credentials return provider_configuration_error before preprocessing. Python and AI share a deadline. Medical/disabled types are rejected before decoding. Use uncompressed UTF-8 JSON; multipart is not supported.",
+        "description": "Authenticated JSON/Base64 admission, Python preparation and configured OpenAI/mock extraction. Only student_certificate is enabled. Semantic normalization/validation yields completed or partial; mock results are always partial with mock_result. Missing AI credentials return provider_configuration_error before preprocessing. Python and AI share a deadline. Medical/disabled types are rejected before decoding. Use UTF-8 JSON; multipart is not supported.",
         "requestBody": {
           "required": true,
           "content": {
@@ -36,18 +36,18 @@
         },
         "responses": {
           "200": {
-            "description": "Reviewable extraction. Current responses are partial until task 9's semantic validation. Mock values are explicitly marked; completed examples describe the planned later contract.",
+            "description": "Reviewable extraction after certificate normalization and semantic checks. Completed means no automatic issues/warnings, not administrative approval. Mock data is always partial. Other profile examples describe planned later support.",
             "headers": {"X-OCR-AI-Provider": {"description": "Explicitly selected provider; mock never means actual recognition.", "schema": {"type": "string", "enum": ["openai", "mock"]}}},
             "content": {
               "application/json": {
                 "schema": {"$ref": "#/components/schemas/ProcessResponse"},
                 "examples": {
                   "currentExtraction": {
-                    "summary": "Current shape after real extraction; semantic validation is pending",
+                    "summary": "Current shape when all certificate field checks pass; synthetic values",
                     "value": {
-                      "documentId": "test-doc-001", "documentType": "student_certificate", "detectedDocumentType": "student_certificate", "status": "partial",
+                      "documentId": "test-doc-001", "documentType": "student_certificate", "detectedDocumentType": "student_certificate", "status": "completed",
                       "fields": {"fullName": "Иван Петров Иванов", "facultyNumber": "001234567", "specialty": "Компютърни системи и технологии", "yearOfStudy": 2},
-                      "fieldIssues": [], "warnings": ["field_validation_pending"], "requiresManualReview": true
+                      "fieldIssues": [], "warnings": [], "requiresManualReview": false
                     }
                   },
                   "mockCertificate": {
@@ -55,11 +55,11 @@
                     "value": {
                       "documentId": "test-doc-001", "documentType": "student_certificate", "detectedDocumentType": "student_certificate", "status": "partial",
                       "fields": {"fullName": "Иван Петров Иванов", "facultyNumber": "001234567", "specialty": "Компютърни системи и технологии", "yearOfStudy": 2},
-                      "fieldIssues": [], "warnings": ["mock_result", "field_validation_pending"], "requiresManualReview": true
+                      "fieldIssues": [], "warnings": ["mock_result"], "requiresManualReview": true
                     }
                   },
                   "completeCertificate": {
-                    "summary": "Planned complete result after semantic validation; synthetic values",
+                    "summary": "Complete certificate after semantic validation; synthetic values",
                     "value": {
                       "documentId": "test-doc-001",
                       "documentType": "student_certificate",
@@ -78,7 +78,7 @@
                       "status": "partial",
                       "fields": {"fullName": "Ivan Petrov Ivanov", "facultyNumber": "001234567", "specialty": null, "yearOfStudy": 2},
                       "fieldIssues": [{"field": "specialty", "code": "missing", "message": "Specialty was not found. Enter it manually."}],
-                      "warnings": ["field_validation_pending"], "requiresManualReview": true
+                      "warnings": [], "requiresManualReview": true
                     }
                   },
                   "completePlacementOrder": {
@@ -214,7 +214,7 @@
           "status": {"type": "string", "enum": ["completed", "partial"]},
           "fields": {"type": "object"},
           "fieldIssues": {"type": "array", "items": {"$ref": "#/components/schemas/FieldIssue"}},
-          "warnings": {"type": "array", "uniqueItems": true, "items": {"type": "string", "enum": ["document_type_mismatch", "field_validation_pending", "mock_result"]}},
+          "warnings": {"type": "array", "uniqueItems": true, "items": {"type": "string", "enum": ["document_type_mismatch", "mock_result"]}},
           "requiresManualReview": {"type": "boolean", "description": "Additional attention flag; false does not waive human confirmation."}
         },
         "oneOf": [
@@ -226,7 +226,7 @@
         "allOf": [
           {
             "if": {"properties": {"status": {"const": "completed"}}},
-            "then": {"properties": {"requiresManualReview": {"const": false}, "fieldIssues": {"maxItems": 0}, "warnings": {"maxItems": 0}, "fields": {"additionalProperties": {"not": {"type": "null"}}}}},
+            "then": {"properties": {"requiresManualReview": {"const": false}, "fieldIssues": {"maxItems": 0}, "warnings": {"maxItems": 0}, "fields": {"additionalProperties": {"not": {"type": "null"}, "maxLength": 200}, "properties": {"facultyNumber": {"type": "string", "minLength": 5, "maxLength": 12}, "yearOfStudy": {"type": "integer", "minimum": 1, "maximum": 6}}}}},
             "else": {"properties": {"requiresManualReview": {"const": true}}, "anyOf": [{"properties": {"fieldIssues": {"minItems": 1}}}, {"properties": {"warnings": {"minItems": 1}}}]}
           }
         ]
