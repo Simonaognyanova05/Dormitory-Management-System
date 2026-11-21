@@ -216,7 +216,8 @@ test('a live provider with stalled response body is aborted and times out within
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.write('{"choices":');
   });
-  const config = configuration({ OPENAI_BASE_URL: baseUrl, AI_REQUEST_TIMEOUT_MS: '100', PROCESSING_TIMEOUT_MS: '1000' });
+  // Leave headroom for CI load so this isolates per-attempt, not overall expiry.
+  const config = configuration({ OPENAI_BASE_URL: baseUrl, AI_REQUEST_TIMEOUT_MS: '100', PROCESSING_TIMEOUT_MS: '5000' });
   await assert.rejects(createGptVisionClient(config).extract(prepared(), 'student_certificate', context(config)), safeError(504, 'provider_timeout'));
 });
 

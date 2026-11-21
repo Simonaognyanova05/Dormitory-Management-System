@@ -14,6 +14,8 @@ function errorHandler(error, req, res, next) {
     exposed = new ApiError(400, 'invalid_request', 'Request body could not be read.');
   }
   if (exposed) {
+    const seconds = exposed.details?.retryAfterSeconds;
+    if (exposed.retryable && Number.isSafeInteger(seconds) && seconds >= 0) res.set('Retry-After', String(seconds));
     return res.status(exposed.status).json({
       error: {
         code: exposed.code,

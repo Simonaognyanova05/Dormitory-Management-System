@@ -4,9 +4,11 @@
 
 `python-preprocessor.js` starts [python/preprocess.py](../../../python/preprocess.py) with `child_process.spawn()` and separate arguments, from the repository root, with `shell: false`. A configured relative Python path is resolved from that root. The original bytes go through stdin; the script receives the configured input limits and an explicit 2000-pixel output-side limit. Each request owns its child process and buffers.
 
-Stdout is bounded UTF-8 JSON. Stderr is separately bounded and discarded, never merged into JSON or logged. Both normal completion and error handling wait for child-process closure. Timeout, cancellation, or output overflow terminates the worker, with a 250 ms force-kill fallback. HTTP disconnects cancel the request's worker. No temporary files are created by the HTTP path.
+Stdout is bounded UTF-8 JSON. Stderr is separately bounded and discarded, never merged into JSON or logged. Both normal completion and error handling wait for child-process closure. Timeout, cancellation, or output overflow terminates the worker, with a 250 ms force-kill fallback. Input-pipe failure permits 250 ms for a structured exit, then stops a stalled worker. HTTP disconnects cancel the request's worker. No temporary files are created by the HTTP path.
 
 [prepared-document.js](../../validators/prepared-document.js) validates the exact protocol, page count/order against the inspected source, image dimensions, transformations, Base64 and actual RGB PNG decoding. Python and AI reuse one processing deadline; provider retries do not reset the budget.
+
+The orchestrator checks cancellation/deadline at every phase boundary, so expired preprocessing cannot start a later AI stage. See [RELIABILITY.md](../../../RELIABILITY.md) for cooldown handling and the caller's source-retention/manual-entry responsibilities.
 
 Known Python validation codes are mapped to fixed safe API errors. Arbitrary child messages/details are not forwarded. Missing executables/imports are `503 processing_not_configured` at stage `preprocessing`; invalid output or output overflow is `500 internal_error`; deadline expiry is retryable `504 processing_timeout`. Original documents remain unchanged in the monolith.
 

@@ -82,9 +82,9 @@ The public response includes **`mock_result`**, `status: "partial"`, `requiresMa
 
 - Python and AI share `PROCESSING_TIMEOUT_MS`; extraction receives the remaining deadline rather than starting a new full budget.
 - `AI_REQUEST_TIMEOUT_MS` caps each provider attempt. Overall expiry is `504 processing_timeout`; per-attempt/provider expiry is `504 provider_timeout`.
-- Network errors, 429/5xx, and malformed/incomplete structured output allow **one retry**, with a 250 ms backoff only when the remaining budget permits it.
+- Network errors, 429/5xx, and malformed/incomplete structured output allow **one retry**. Backoff is max(250 ms, valid provider `Retry-After`), only when it fits the remaining budget. Numeric retry metadata is returned to the caller when available.
 - Provider authentication errors, other rejected requests, refusals, unreadable documents, and medical detections are not retried.
-- Client disconnection aborts active transport and retry waits.
+- Explicit timeout/cancellation promises bound even replacement transports that ignore their abort signal. Active readers are cancelled and late responses discarded. Client disconnection aborts transport and retry waits.
 - `MAX_AI_RESPONSE_BYTES` caps the streamed, decoded response body. Oversized/non-JSON/invalid UTF-8 output is `502 provider_bad_response`.
 - Provider error bodies, refusal text, API keys, image data, and raw extracted content are not written to logs or included in error messages. Redirects are not followed.
 

@@ -12,7 +12,7 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "check": "node scripts/check-syntax.js",
-    "test": "node --test tests/request-handling.test.js tests/python-preprocessor.test.js tests/ai-extraction.test.js tests/certificate-fields.test.js tests/evaluation.test.js",
+    "test": "node --test tests/request-handling.test.js tests/python-preprocessor.test.js tests/ai-extraction.test.js tests/certificate-fields.test.js tests/evaluation.test.js tests/reliability.test.js",
     "test:python": "node --test tests/python-integration.test.js",
     "check:python": "node scripts/check-python.js",
     "evaluate": "node scripts/evaluate.js"

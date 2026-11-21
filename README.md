@@ -203,6 +203,14 @@ Python checks:
 
 Request/file/page/pixel limits are enforced during admission and passed to Python. The processing deadline covers Python and the AI stage, including at most one provider retry; it is not reset after preprocessing. Python workers are terminated on cancellation/timeout/output overflow, with a 250 ms force-kill fallback. AI transport is aborted on timeout/disconnect. Images with multiple decoder-reported pages are unsupported. Missing service/AI credentials do not prevent `/health` from starting.
 
+### Failure Handling and Manual Recovery
+
+AI deadlines/cancellation also bound replacement transports that ignore abort signals; late responses and active body readers are discarded/cancelled. The pipeline rechecks its budget before starting each stage. Input-pipe failures stop stalled Python workers after a short structured-error grace.
+
+Valid provider `Retry-After` hints are honored when they fit the budget, or returned as `error.details.retryAfterSeconds` and an HTTP `Retry-After` header when a retryable error is returned. There are still at most two provider attempts per service request. The worker in the monolith must additionally bound its own retries and retain the original for manual entry. The evaluation CLI stops a batch on an explicit positive provider cooldown.
+
+See **[RELIABILITY.md](RELIABILITY.md)** for the failure matrix, budgets, retry scheduling and integration responsibilities. Real persisted-file/manual-entry verification needs the monolith/frontend and remains pending; the stateless microservice recovery contract is tested.
+
 ### Commands
 
 | Command | Purpose |
@@ -273,6 +281,7 @@ tests/
   python-preprocessor.test.js  # Process failures, output validation, deadlines and cancellation
   python-integration.test.js   # Real Python and HTTP integration
   ai-extraction.test.js        # Provider protocol, errors, deadlines, mock and HTTP extraction
+  reliability.test.js          # Cooldowns, independent deadlines, cleanup and recovery
   certificate-fields.test.js   # Golden certificate cases and semantic/Unicode/status checks
   evaluation.test.js           # Scoring, failure coverage, CLI reports and timing checks
   fixtures/encrypted-pdf.json   # Synthetic password-protected PDF

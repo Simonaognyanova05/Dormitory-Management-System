@@ -162,12 +162,15 @@ My service receives a document from the monolith, prepares it, extracts its fiel
 
 ### 11. Handle Failures and Execution Deadlines
 
-- [ ] Handle timeouts, network errors, rate limits, and provider failures.
-- [ ] Handle invalid/incomplete AI JSON and unreadable documents.
-- [ ] Add bounded retries only for suitable errors.
-- [ ] Align the overall time budget with the monolith's timeout and retry behavior, including Python processing.
-- [ ] Return errors without API keys, personal data, or the provider's full response content.
-- [ ] Verify that the monolith can retain the original and allow manual entry regardless of the OCR outcome.
+- [x] Handle timeouts, network errors, rate limits and provider failures, including transports/readers that do not automatically obey abort signals.
+- [x] Handle invalid/incomplete AI JSON, unreadable documents, late responses and Python stream/delivery failures without invented successes.
+- [x] Bound internal retries to suitable errors and honor valid `Retry-After` hints without exceeding the shared budget.
+- [x] Check the overall deadline/cancellation at stage boundaries; document a 45-second-plus-upload caller response window and separate bounded worker retries.
+- [x] Return safe fixed error messages and sanitized numeric retry metadata without provider bodies, image data or credentials.
+- [x] Verify stateless API recovery with unchanged caller-owned bytes/document ID, and document source-retention/manual-entry responsibilities.
+- [ ] Verify the real monolith's persisted original and manual-entry UI during integration; that implementation is not in this OCR branch.
+
+**Deliverables:** [RELIABILITY.md](RELIABILITY.md), explicit AI deadline/cancellation races and body cleanup, retry-hint handling, faster stalled-input termination, phase-boundary checks and reliability tests. The evaluation runner also stops on an explicit provider cooldown. Verification passed: **86 Node.js tests**, **4 actual Python integration tests**, and OpenAPI validation, without paid provider calls. Real monolith/manual-entry acceptance and task 10's real-provider measurements remain pending.
 
 **Done when:** failures leave no stalled processes or temporary files and produce predictable API responses.
 

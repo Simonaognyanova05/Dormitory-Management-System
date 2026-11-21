@@ -22,6 +22,7 @@ async function runEvaluation(dataset, config, { processDocument = createDocument
     const row = {
       id: document.id, quality: document.quality, fileSha256: document.sha256, pageCount: document.pageCount,
       state: 'not_attempted', resultStatus: null, requiresManualReview: null, errorCode: null,
+      retryAfterSeconds: null,
       detectedDocumentType: null, warnings: [],
       timings: { admissionMs: null, preprocessingMs: null, aiMs: null, validationMs: null, totalMs: null },
       fields: scoreFields(document.expectedFields, null, { includeValues }),
@@ -53,10 +54,16 @@ async function runEvaluation(dataset, config, { processDocument = createDocument
       finished ??= performance.now();
       if (error instanceof EvaluationError && error.code === 'mock_result') throw error;
       row.state = signal?.aborted || error.name === 'AbortError' ? 'cancelled' : 'error';
-      row.errorCode = error instanceof ApiError || error instanceof EvaluationError ? error.code : row.state === 'cancelled' ? 'cancelled' : 'internal_error';
+      row.errorCode = row.state === 'cancelled' ? 'cancelled' : error instanceof ApiError || error instanceof EvaluationError ? error.code : 'internal_error';
+      const retryAfter = error instanceof ApiError && error.retryable ? error.details?.retryAfterSeconds : undefined;
+      if (Number.isSafeInteger(retryAfter) && retryAfter >= 0) row.retryAfterSeconds = retryAfter;
       if (row.state === 'cancelled' || ['provider_configuration_error', 'processing_not_configured', 'dataset_changed', 'invalid_dataset'].includes(row.errorCode)) {
         aborted = true;
         abortCode = row.errorCode;
+      } else if (row.retryAfterSeconds > 0) {
+        // Do not start a different document while the provider explicitly requests a pause.
+        aborted = true;
+        abortCode = 'provider_retry_after';
       }
     } finally {
       if (stageTimings) Object.assign(row.timings, { preprocessingMs: stageTimings.preprocessingMs, aiMs: stageTimings.aiMs, validationMs: stageTimings.validationMs });

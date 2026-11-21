@@ -152,6 +152,22 @@ test('fatal configuration aborts remaining documents without inflating accuracy'
   assert.equal(report.summary.earlyTargets.fieldAccuracyAtLeast90Percent, null);
 });
 
+test('a provider Retry-After stops the batch instead of immediately calling the next document', async (t) => {
+  const data = await fixture(t);
+  const dataset = await loadDataset(data.filename, config());
+  let calls = 0;
+  const report = await runEvaluation(dataset, config(), { processDocument: async () => {
+    calls += 1;
+    throw new ApiError(503, 'provider_unavailable', 'Unavailable', { retryable: true, details: { retryAfterSeconds: 120 } });
+  } });
+  assert.equal(calls, 1);
+  assert.equal(report.abortCode, 'provider_retry_after');
+  assert.equal(report.documents[0].retryAfterSeconds, 120);
+  assert.equal(report.summary.notAttemptedDocuments, 9);
+  assert.equal(report.summary.earlyTargets.fieldAccuracyAtLeast90Percent, null);
+  assert.match(markdownReport(report), /retry after 120s/);
+});
+
 test('mock configuration/results are rejected and source changes invalidate the run', async (t) => {
   const data = await fixture(t);
   const dataset = await loadDataset(data.filename, config());

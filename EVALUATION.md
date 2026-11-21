@@ -120,7 +120,7 @@ The early indicators compare all-field accuracy with **90%** and successful comp
 
 ## 7. Failures and Interruption
 
-Transient document/provider failures are recorded and evaluation continues. Fatal provider configuration, missing Python setup, or source changes abort further calls; remaining documents stay visible as `not_attempted` and do not earn correct-field credit. Inputs are rehashed just before processing to detect changes after validation.
+Transient document/provider failures are recorded and evaluation continues unless the final error includes a positive provider cooldown. In that case the batch stops with `provider_retry_after` and records the delay, rather than immediately sending the next document. Rerun later into a fresh output directory. Fatal configuration, missing Python setup, or changed/unreadable source files also abort further calls; remaining documents stay `not_attempted` and earn no correct-field credit. Inputs are rehashed just before processing.
 
 `Ctrl+C` cancels the current request/worker and writes an incomplete report. Exit codes:
 

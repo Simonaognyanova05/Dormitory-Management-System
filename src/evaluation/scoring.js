@@ -108,6 +108,7 @@ function markdownReport(report) {
     `Dataset: **${report.dataset.datasetId}** (${report.dataset.synthetic ? 'synthetic' : 'operator supplied'}; ${report.dataset.documents} documents).`,
     `Provider/model: **${report.provider.name} / ${report.provider.model}**.`,
     `Attempted: ${summary.attemptedDocuments}; successful: ${summary.successfulDocuments}; failed: ${summary.failedDocuments}; not attempted: ${summary.notAttemptedDocuments}.`, '',
+    ...(report.aborted ? [`Run stopped: **${report.abortCode}**. Remaining documents stay unattempted; target indicators are not assessed.`, ''] : []),
     `All-field accuracy: **${percent(summary.fields.accuracy)}** (${summary.fields.correct}/${summary.fields.total}).`,
     `Present-field accuracy: **${percent(summary.fields.present.accuracy)}**. Correct absences: ${summary.fields.absent.correct}/${summary.fields.absent.total}; hallucinated absent values: ${summary.fields.absent.hallucinated}.`,
     `Overall median / p95: **${seconds(summary.timings.totalMs.medianMs)} / ${seconds(summary.timings.totalMs.p95Ms)}** (all attempted documents, including failures).`,
@@ -124,7 +125,8 @@ function markdownReport(report) {
       const notes = [...(score.matched ? [] : ['value mismatch']), ...score.issueCodes];
       return notes.length ? [`${field}: ${notes.join(', ')}`] : [];
     });
-    lines.push(`| ${row.id} | ${row.quality} | ${row.state}${row.resultStatus ? ` / ${row.resultStatus}` : ''} | ${Object.values(row.fields).filter((score) => score.matched).length}/4 | ${seconds(row.timings.totalMs)} | ${row.errorCode || [...issues, ...(row.warnings || [])].join('; ') || 'none'} |`);
+    const failure = row.errorCode ? `${row.errorCode}${row.retryAfterSeconds ? ` (retry after ${row.retryAfterSeconds}s)` : ''}` : null;
+    lines.push(`| ${row.id} | ${row.quality} | ${row.state}${row.resultStatus ? ` / ${row.resultStatus}` : ''} | ${Object.values(row.fields).filter((score) => score.matched).length}/4 | ${seconds(row.timings.totalMs)} | ${failure || [...issues, ...(row.warnings || [])].join('; ') || 'none'} |`);
   }
   lines.push('', 'Comparison: NFC and boundary whitespace; collapse name/specialty whitespace only. Case, spelling, leading zeros and field types remain significant. Missing pipeline results score zero for every field, including annotated absences.', 'p95 uses nearest rank. Disk reads/Base64 encoding, HTTP upload and streaming JSON parsing are outside the measured boundary. Admission, Python, AI retries and field validation are included.', 'See the JSON report for hashes, configuration provenance, stage times, quality groups and field-level outcomes.', '');
   return lines.join('\n');

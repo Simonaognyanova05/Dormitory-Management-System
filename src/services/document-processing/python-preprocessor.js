@@ -88,11 +88,13 @@ function collectOutput(input, config, { signal, deadlineAt, spawnProcess }) {
     let failure;
     let stdinFailed = false;
     let forceKill;
+    let deliveryTimer;
     let closed = false;
 
     function stop(error) {
       if (failure || closed) return;
       failure = error;
+      clearTimeout(deliveryTimer);
       chunks = [];
       child.stdin.destroy();
       if (child.pid) {
@@ -108,7 +110,15 @@ function collectOutput(input, config, { signal, deadlineAt, spawnProcess }) {
     signal?.addEventListener('abort', onAbort, { once: true });
 
     child.on('error', () => stop(unavailableError()));
-    child.stdin.on('error', () => { stdinFailed = true; });
+    child.stdin.on('error', () => {
+      stdinFailed = true;
+      if (failure || closed) return;
+      // Allow a promptly exiting Python process to report its structured error.
+      // A worker that closes its input and stalls must not consume the whole budget.
+      clearTimeout(deliveryTimer);
+      deliveryTimer = setTimeout(() => stop(new ApiError(500, 'internal_error', 'Could not deliver the document to Python.')), 250);
+      deliveryTimer.unref();
+    });
     child.stdout.on('error', () => stop(new ApiError(500, 'internal_error', 'Could not read preprocessing output.')));
     child.stderr.on('error', () => stop(new ApiError(500, 'internal_error', 'Could not read preprocessing diagnostics.')));
     child.stdout.on('data', (chunk) => {
@@ -131,6 +141,7 @@ function collectOutput(input, config, { signal, deadlineAt, spawnProcess }) {
       closed = true;
       clearTimeout(timer);
       clearTimeout(forceKill);
+      clearTimeout(deliveryTimer);
       signal?.removeEventListener('abort', onAbort);
       if (failure) return reject(failure);
       if (performance.now() >= deadlineAt) return reject(timeoutError());

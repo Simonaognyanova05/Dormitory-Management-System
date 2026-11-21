@@ -175,3 +175,19 @@ test('does not accept success if stdin failed before the file was delivered', as
   const worker = fixture(t, 'early-success');
   await assert.rejects(worker.prepare({ ...input, buffer: Buffer.alloc(10 * 1024 * 1024) }), safeError(500, 'internal_error'));
 });
+
+test('an input pipe failure stops a stalled worker before the overall deadline', async (t) => {
+  const worker = fixture(t, 'hang');
+  const rejected = assert.rejects(worker.prepare(input), (error) => {
+    safeError(500, 'internal_error')(error);
+    assert.match(error.message, /deliver the document/);
+    assert.equal(error.retryable, false);
+    return true;
+  });
+  const state = await worker.started;
+  // Inject the stream's actual failure event, independent of OS pipe buffering.
+  state.child.stdin.emit('error', Object.assign(new Error('private-worker-content'), { code: 'EPIPE' }));
+  await rejected;
+  assert.ok(worker.states[0].closed);
+  assert.ok(worker.states[0].child.killed);
+});

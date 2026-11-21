@@ -144,6 +144,9 @@
     "securitySchemes": {
       "ServiceToken": {"type": "apiKey", "in": "header", "name": "X-Service-Token", "description": "Internal shared token; never expose it to the browser."}
     },
+    "headers": {
+      "RetryAfter": {"description": "Optional normalized provider cooldown in seconds. The worker should respect it in addition to its bounded backoff; no internal retry is made if the delay does not fit the processing deadline.", "schema": {"type": "integer", "minimum": 0}}
+    },
     "schemas": {
       "DocumentId": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$", "description": "Opaque identifier; UUID is allowed but not required."},
       "DocumentType": {"type": "string", "enum": ["student_certificate", "placement_order", "placement_form", "address_registration"], "description": "Full planned registry. Only student_certificate is currently enabled for admission; other types return unsupported_document_type until enabled."},
@@ -240,7 +243,7 @@
               "code": {"type": "string", "enum": ["invalid_json", "invalid_request", "invalid_base64", "unauthorized", "not_found", "payload_too_large", "file_too_large", "page_limit_exceeded", "unsupported_media_type", "unsupported_file", "unsupported_document_type", "unreadable_document", "internal_error", "provider_bad_response", "provider_request_rejected", "provider_unavailable", "service_not_configured", "provider_configuration_error", "processing_not_configured", "processing_timeout", "provider_timeout"]},
               "message": {"type": "string", "minLength": 1},
               "retryable": {"type": "boolean"},
-              "details": {"type": "object", "additionalProperties": true, "description": "Safe field-level metadata only; never echo file content or secrets."}
+              "details": {"type": "object", "additionalProperties": true, "properties": {"retryAfterSeconds": {"type": "integer", "minimum": 0}}, "description": "Safe metadata only, including optional normalized retry cooldown; never echo file content or secrets."}
             }
           }
         }
@@ -281,14 +284,17 @@
       },
       "Unavailable": {
         "description": "provider_unavailable is retryable; missing credentials/model, provider authentication errors and Python startup/configuration failures are not.",
+        "headers": {"Retry-After": {"$ref": "#/components/headers/RetryAfter"}},
         "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "examples": {
           "missingAiConfiguration": {"summary": "Real mode requires an API key and model", "value": {"error": {"code": "provider_configuration_error", "message": "Configure OPENAI_API_KEY and OPENAI_MODEL before using the OpenAI provider.", "retryable": false, "details": {"stage": "extraction"}}}},
           "pythonUnavailable": {"summary": "Python executable/script/dependencies could not start", "value": {"error": {"code": "processing_not_configured", "message": "Could not start Python preprocessing. Check PYTHON_COMMAND, the script and installed dependencies.", "retryable": false, "details": {"stage": "preprocessing"}}}},
-          "providerUnavailable": {"summary": "Transient AI failure", "value": {"error": {"code": "provider_unavailable", "message": "The AI provider is temporarily unavailable.", "retryable": true, "details": {}}}}
+          "providerUnavailable": {"summary": "Transient AI failure", "value": {"error": {"code": "provider_unavailable", "message": "The AI provider is temporarily unavailable.", "retryable": true, "details": {}}}},
+          "providerCooldown": {"summary": "Provider cooldown exceeds the remaining internal budget", "value": {"error": {"code": "provider_unavailable", "message": "The AI provider is temporarily unavailable.", "retryable": true, "details": {"retryAfterSeconds": 120}}}}
         }}}
       },
       "Timeout": {
         "description": "processing_timeout or provider_timeout; retryable within the monolith's bounded retry policy.",
+        "headers": {"Retry-After": {"$ref": "#/components/headers/RetryAfter"}},
         "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}, "example": {"error": {"code": "processing_timeout", "message": "The processing deadline was exceeded.", "retryable": true, "details": {}}}}}
       }
     }

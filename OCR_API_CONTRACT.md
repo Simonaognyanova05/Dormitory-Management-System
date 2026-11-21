@@ -67,7 +67,7 @@ The architecture's `student_status_certificate` maps to this contract's `student
 
 The implemented preprocessing adapter includes Python startup/execution and output validation in that budget. Timeout terminates the child process before responding; cancellation also stops it. A 250 ms force-kill fallback is reserved for cleanup. Python stdout is capped at **64 MiB** and stderr at **64 KiB**; exceeding either cap is an internal preprocessing error. Stderr is discarded and never included in responses. The HTTP pipeline uses in-memory stdin/stdout and no preview output directory.
 
-AI attempts use only the remaining shared deadline, with a default per-attempt cap of **20 seconds** and a **256 KiB** decoded provider-response limit. At most one internal retry is made, with a 250 ms backoff when time permits. HTTP disconnects abort active AI transport and retry waits. Real mode sends prepared images to the configured provider; mock is selected explicitly and is never an error fallback.
+AI attempts use only the remaining shared deadline, with a default per-attempt cap of **20 seconds** and a **256 KiB** decoded provider-response limit. At most one internal retry is made, with backoff max(250 ms, valid provider `Retry-After`) when it fits the remaining budget. Otherwise the retryable error returns immediately with numeric `retryAfterSeconds` details and an HTTP `Retry-After` header when available. Explicit timeout/cancellation bounds the operation independently of transport abort compliance; active readers and late responses are cleaned up. See [RELIABILITY.md](RELIABILITY.md).
 
 The size/page/pixel limits and hard deadline are implementation proposals, not newly approved requirements. Each retry must fit inside the same processing deadline.
 
@@ -208,7 +208,7 @@ Errors use this envelope. `details` contains safe field-level metadata, never fi
 | 503 | `service_not_configured`, `provider_configuration_error`, `processing_not_configured` | No | Correct credentials/model/configuration. `processing_not_configured` at stage `preprocessing` means Python startup/dependencies failed. |
 | 504 | `processing_timeout`, `provider_timeout` | Yes | Retry later or allow manual entry |
 
-The monolith checks `retryable`, not HTTP status alone. Do not retry partial results automatically. Transient network errors, provider rate limits/5xx, and invalid model responses allow at most one internal retry within the same deadline. Provider authentication errors and other non-retryable errors are not retried.
+The monolith checks `retryable`, not HTTP status alone, and respects the optional `Retry-After` header/`error.details.retryAfterSeconds` in addition to its own capped backoff. Do not retry partial results automatically. Transient network errors, provider rate limits/5xx, and invalid model responses allow at most one internal retry within the same deadline. Authentication and other permanent errors are not retried. An input-pipe failure that leaves Python stalled is terminated after a short structured-error grace and returns a non-retryable internal error.
 
 Repeated calls with the same `documentId` may run extraction again and incur another AI call. The service does not store or deduplicate jobs, and it does not promise identical AI results. The monolith prevents duplicate active jobs and ignores results for outdated/deleted documents.
 

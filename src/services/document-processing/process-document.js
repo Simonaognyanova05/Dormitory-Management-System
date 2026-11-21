@@ -9,19 +9,26 @@ function createDocumentProcessor(config, { prepare = createPythonPreprocessor(co
     const started = performance.now();
     const deadlineAt = started + config.limits.processingTimeoutMs;
     const timings = { preprocessingMs: null, aiMs: null, validationMs: null, totalMs: null };
+    function checkActive() {
+      if (input.signal?.aborted) throw new DOMException('Processing was cancelled.', 'AbortError');
+      if (performance.now() >= deadlineAt) {
+        throw new ApiError(504, 'processing_timeout', 'The processing deadline was exceeded.', { retryable: true });
+      }
+    }
     async function measure(key, operation) {
       const before = performance.now();
       try { return await operation(); }
       finally { timings[key] = performance.now() - before; }
     }
     try {
+      checkActive();
       client.assertConfigured();
       const prepared = await measure('preprocessingMs', () => prepare(input, { signal: input.signal, deadlineAt }));
+      checkActive();
       const extraction = await measure('aiMs', () => client.extract(prepared, input.documentType, { signal: input.signal, deadlineAt }));
+      checkActive();
       const result = await measure('validationMs', () => buildExtractionResponse(input, extraction, { mock: client.mode === 'mock' }));
-      if (performance.now() >= deadlineAt) {
-        throw new ApiError(504, 'processing_timeout', 'The processing deadline was exceeded.', { retryable: true });
-      }
+      checkActive();
       return result;
     } finally {
       timings.totalMs = performance.now() - started;
