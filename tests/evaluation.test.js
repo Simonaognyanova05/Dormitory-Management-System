@@ -89,6 +89,7 @@ test('manifest checks require ten samples, unique IDs, exact field types and por
     (value) => value.documents.pop(),
     (value) => { value.documents[1].id = value.documents[0].id; },
     (value) => { value.documents[0].file = '../private.pdf'; },
+    (value) => { value.documents[0].documentType = 'placement_order'; },
     (value) => { value.documents[0].expectedFields.facultyNumber = 123; },
     (value) => { value.documents[0].expectedFields.yearOfStudy = 'II'; },
     (value) => { value.documents[0].expectedFields.egn = 'extra'; },

@@ -1,16 +1,20 @@
 # Vision Extraction Client
 
-Task 8 adds a real **OpenAI-compatible Chat Completions** adapter and an explicit, replaceable mock client for `student_certificate`. Both consume the prepared PNG pages from Python and return the same internal extraction shape.
+The **OpenAI-compatible Chat Completions** adapter and explicitly selected mock client support `student_certificate` and `placement_order`. Both consume prepared PNG pages and return the shared internal envelope with the requested profile's exact field set. Schemas/prompts are per-request, so concurrent types do not mix.
 
 ## Files
 
 - `certificate-profile.js`: the four target fields, document-type hints, prompt, and strict JSON Schema.
+- `placement-order-profile.js`: order number/date/dormitory/room schema, date-source hints and multi-student ambiguity instructions.
+- `document-profiles.js`: metadata-only profile selection; no validator imports or mutable per-request state.
+- `vision-request.js`: shared ordered image request builder using the selected profile.
 - `gpt-vision.js`: native `fetch` transport, bounded response reading, provider errors, deadlines, cancellation, and at most one retry.
 - `mock-vision.js`: fresh fixed synthetic values for every request; it never reads the document or calls an API.
 - `client.js`: selects the provider from `AI_PROVIDER`; no automatic fallback to mock.
 - `extraction-response.js`: normalizes/validates certificate values and classifies completed/partial results with review issues/warnings.
 - [ai-extraction.js](../../validators/ai-extraction.js): runtime validation of the provider's internal JSON shape.
 - [certificate-fields.js](../../validators/certificate-fields.js): semantic certificate-field normalization and validation.
+- [placement-order-fields.js](../../validators/placement-order-fields.js): calendar-date and textual order/location normalization.
 
 ## Real Provider Configuration
 
@@ -32,9 +36,9 @@ The endpoint is `<OPENAI_BASE_URL>/chat/completions`. The base URL must not cont
 
 ## What Is Sent
 
-One provider request contains all prepared page images in order, field descriptions, and a strict JSON Schema. It does not include the original filename, document ID, student profile, or application history. Images use Base64 data URLs with the configured detail level. The request sets `store: false` and requests no tools.
+One provider request contains all prepared page images in order, profile-specific descriptions/instructions and strict JSON Schema. It does not include the original filename, document ID, student profile, or application history. Images use Base64 data URLs with the configured detail level. The request sets `store: false` and requests no tools.
 
-The prompt treats all document content as untrusted data, asks for original-language values and leading zeros, and requires `null` rather than guessed facts. It distinguishes the student's name from the issuer's name and course from semester/academic year. Ambiguity is represented by field names in `uncertainFields`, not fabricated numeric confidence.
+The prompts treat document content as untrusted data, preserve original-language values and leading zeros, and require `null` rather than guessed facts. Certificate instructions distinguish student/issuer names and course/semester. Order instructions distinguish order/placement-start dates and refuse arbitrary row selection in multi-student tables. Ambiguity uses names in `uncertainFields`, not numeric confidence.
 
 Declared medical/disabled types are rejected before processing by the API and cannot be requested directly from this client. If the model identifies a medical document, the response adapter rejects it and returns no extracted content.
 
@@ -54,13 +58,13 @@ Declared medical/disabled types are rejected before processing by the API and ca
 }
 ```
 
-All properties are required, and extra properties/wrong types are rejected. `fields` has exactly the four certificate keys. Missing values are nullable. The runtime validator also checks the schema independently of the provider's schema promise.
+This is the certificate example. Order extraction uses exactly `orderNumber`, `orderDate`, `dormitory`, `room`, each string-or-null, and its own uncertainty enum. All envelope/profile properties are required; extra properties, wrong types and another profile's fields are rejected. Missing values are nullable. The runtime validator independently checks the selected schema shape.
 
 `readable: false` becomes `422 unreadable_document`; a medical detection becomes `422 unsupported_document_type`. A different/unknown detected type returns a reviewable result with `document_type_mismatch`. Provider refusal is a non-retryable `502 provider_request_rejected`, not invented data.
 
 ## Field Validation and Review State
 
-The provider schema verifies JSON structure, not the correctness of recognized values. [The semantic normalizer](../../validators/certificate-fields.js) applies the certificate rules from [DOCUMENT_PROFILES.md](../../../DOCUMENT_PROFILES.md): NFC/whitespace normalization, string identifiers with preserved leading zeros, the working 5–12 letter/digit faculty-number format, a 200-code-point text limit, and study years 1–6.
+The provider schema verifies JSON structure, not the correctness of recognized values. [Certificate validation](../../validators/certificate-fields.js) checks faculty identifiers and years; [order validation](../../validators/placement-order-fields.js) checks source identifiers and Gregorian calendar dates, normalizing valid dates to ISO without locale/timezone conversion. Both use shared own-key iteration/missing/uncertain handling and preserve invalid candidates for review under [DOCUMENT_PROFILES.md](../../../DOCUMENT_PROFILES.md).
 
 Successful extraction returns HTTP **200**. If all values pass the semantic rules, the type matches and no issues/warnings remain, the response is `completed` with `requiresManualReview: false`. Missing, invalid, uncertain or mismatched data remains `partial`. Mock mode always remains partial. The temporary validation-pending warning is no longer emitted.
 
@@ -74,7 +78,7 @@ The provider's strict schema is still enforced first. Defensive normalizer tests
 AI_PROVIDER=mock
 ```
 
-Restart after changing `.env`. This mode requires no AI key/model and makes no provider requests. It still performs real admission and Python image preparation. It returns the same fixed synthetic certificate fields for **any valid image, including a blank one**, so it is not OCR and cannot be used for accuracy evaluation.
+Restart after changing `.env`. This mode requires no AI key/model and makes no provider requests. Admission and Python preparation are real. Each profile returns its own fixed synthetic fields for **any valid image, including a blank one**; this is not OCR and cannot measure accuracy. Order demo values and Postman usage are in [PLACEMENT_ORDERS.md](../../../PLACEMENT_ORDERS.md).
 
 The public response includes **`mock_result`**, `status: "partial"`, `requiresManualReview: true`, and `X-OCR-AI-Provider: mock`, even when every synthetic value has a valid format. Real mode uses the `openai` header value. Selecting mock is explicit; transport errors never silently turn into demonstration results.
 

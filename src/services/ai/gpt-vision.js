@@ -3,7 +3,8 @@ const { performance } = require('node:perf_hooks');
 const { setTimeout: delay } = require('node:timers/promises');
 const { ApiError } = require('../../errors/api-error');
 const { badAiResponse, validateAiExtraction } = require('../../validators/ai-extraction');
-const { buildVisionRequest, requireCertificate } = require('./certificate-profile');
+const { buildVisionRequest } = require('./vision-request');
+const { getDocumentProfile } = require('./document-profiles');
 const { retryAfterSeconds, retryDelayMs } = require('./retry-policy');
 
 function processingTimeout() {
@@ -78,7 +79,7 @@ function providerStatusError(status, headers) {
   return new ApiError(502, 'provider_request_rejected', 'AI rejected the extraction request. Check model/API compatibility.');
 }
 
-async function requestExtraction(body, config, fetchImpl, attemptSignal, signal, deadlineAt) {
+async function requestExtraction(body, config, fetchImpl, attemptSignal, signal, deadlineAt, documentType) {
   if (attemptSignal.aborted) throw new DOMException('AI attempt was aborted.', 'AbortError');
   checkActive(signal, deadlineAt);
   const response = await fetchImpl(`${config.ai.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
@@ -109,12 +110,12 @@ async function requestExtraction(body, config, fetchImpl, attemptSignal, signal,
   } catch {
     throw badAiResponse();
   }
-  const result = validateAiExtraction(extraction);
+  const result = validateAiExtraction(extraction, documentType);
   checkActive(signal, deadlineAt);
   return result;
 }
 
-async function performAttempt(payload, config, fetchImpl, signal, deadlineAt) {
+async function performAttempt(payload, config, fetchImpl, signal, deadlineAt, documentType) {
   checkActive(signal, deadlineAt);
   const body = JSON.stringify(payload);
   checkActive(signal, deadlineAt);
@@ -137,7 +138,7 @@ async function performAttempt(payload, config, fetchImpl, signal, deadlineAt) {
   }, Math.max(1, Math.ceil(Math.min(config.ai.requestTimeoutMs, remaining))));
   try {
     if (signal?.aborted) onAbort();
-    return await Promise.race([requestExtraction(body, config, fetchImpl, controller.signal, signal, deadlineAt), interrupted]);
+    return await Promise.race([requestExtraction(body, config, fetchImpl, controller.signal, signal, deadlineAt, documentType), interrupted]);
   } catch (error) {
     checkActive(signal, deadlineAt);
     if (expired) throw timeoutFailure;
@@ -159,13 +160,13 @@ function createGptVisionClient(config, { fetchImpl = globalThis.fetch } = {}) {
     mode: 'openai',
     assertConfigured,
     async extract(prepared, documentType, { signal, deadlineAt }) {
-      requireCertificate(documentType);
+      getDocumentProfile(documentType);
       checkActive(signal, deadlineAt);
       assertConfigured();
       const payload = buildVisionRequest(prepared, documentType, config);
       for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
-          return await performAttempt(payload, config, fetchImpl, signal, deadlineAt);
+          return await performAttempt(payload, config, fetchImpl, signal, deadlineAt, documentType);
         } catch (error) {
           if (!(error instanceof ApiError) || !error.retryable || error.code === 'processing_timeout' || attempt === 1) throw error;
           const wait = retryDelayMs(error);

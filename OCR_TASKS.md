@@ -85,7 +85,7 @@ My service receives a document from the monolith, prepares it, extracts its fiel
 - [x] Reject medical and unsupported document types **before file decoding, Python processing, or any GPT request**.
 - [x] Return the documented error envelope for invalid requests without exposing file contents or credentials.
 
-**Deliverables:** authenticated `POST /api/v1/ocr/process`, request and file validators, safe API errors, and `tests/request-handling.test.js`. Admission tests cover generated files, including a synthetic encrypted PDF. Only `student_certificate` is enabled. The current pipeline prepares valid input and returns reviewable real/mock extraction; mock values are explicitly labeled. See [README.md](README.md) for Postman setup and expected responses.
+**Deliverables:** authenticated `POST /api/v1/ocr/process`, request/file validators, safe errors, and admission tests with generated/encrypted files. Certificates and placement orders are enabled with separate field sets; medical/optional types remain excluded. Mock values are explicitly labeled. See [README.md](README.md) for Postman setup.
 
 **Done when:** valid requests are accepted, while invalid or unauthorized requests do not reach processing.
 
@@ -142,7 +142,7 @@ My service receives a document from the monolith, prepares it, extracts its fiel
 - [x] Keep format validity separate from recognition accuracy; return no invented confidence score and require human confirmation in the monolith.
 - [x] Return useful partial results and null values for manual entry; mock results always remain partial with `mock_result`.
 
-**Deliverables:** [certificate-fields.js](src/validators/certificate-fields.js), updated response classification and [certificate tests](tests/certificate-fields.test.js). The regression coverage includes six certificate raw-field fixtures, Unicode/boundary cases, local provider-fixture responses and explicitly partial mock results. Placement-order and optional profiles remain for their later tasks; the real-provider smoke/accuracy checks are still pending.
+**Deliverables:** [certificate-fields.js](src/validators/certificate-fields.js), response classification and certificate regression coverage. Task 12 adds independent placement-order semantics using shared iteration/issue handling. Optional profiles and real-provider smoke/accuracy checks remain pending.
 
 **Done when:** a certificate completes the entire flow and the API returns a JSON result that can be reviewed against the original.
 
@@ -176,11 +176,15 @@ My service receives a document from the monolith, prepares it, extracts its fiel
 
 ### 12. Add Placement Orders
 
-- [ ] Create a separate profile for order number, date, dormitory, and room.
-- [ ] Normalize dates to the agreed format, such as `YYYY-MM-DD`.
-- [ ] Preserve letters, separators, and leading zeros in identifiers.
-- [ ] Return partial results and review flags when information is incomplete.
-- [ ] Agree that the monolith matches dormitory and room values against its own records; the OCR service has no direct database connection.
+- [x] Enable `placement_order` with its own strict schema, prompt, mock values and selected-profile runtime checks.
+- [x] Normalize valid ISO/day-first Gregorian dates to `YYYY-MM-DD`; preserve impossible/unsupported dates with `invalid_format` instead of guessing or rolling them forward.
+- [x] Preserve string identifiers, prefixes, punctuation, leading zeros and original suffix alphabets; do not coerce numeric room/order IDs.
+- [x] Return partial/missing/uncertain results and preserve model flags for ambiguous multi-student tables, without switching profiles or choosing database IDs.
+- [x] Provide generated Bulgarian PDF/PNG/JPG examples, expected values and Postman instructions in [PLACEMENT_ORDERS.md](PLACEMENT_ORDERS.md).
+- [x] Document that record matching, capacity checks and placement writes belong to the monolith.
+- [ ] Confirm actual dormitory/room matching and workflow rules with the main application's developer during integration.
+
+**Deliverables:** per-request [profile registry](src/services/ai/document-profiles.js), [order profile](src/services/ai/placement-order-profile.js), [order validator](src/validators/placement-order-fields.js), API examples and regression tests. Verification passed: **100 Node.js tests**, **26 Python tests**, **5 actual Python integration tests**, OpenAPI and generated-demo checks. Certificate behavior remains covered; concurrent profiles are isolated. Real-provider order-layout checks and monolith record matching remain pending. The early quantitative evaluator still accepts certificate datasets only.
 
 **Done when:** both required document types work through the same API with separate profiles.
 

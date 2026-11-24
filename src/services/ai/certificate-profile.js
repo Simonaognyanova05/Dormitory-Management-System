@@ -1,13 +1,6 @@
-const { ApiError } = require('../../errors/api-error');
+const { DETECTED_DOCUMENT_TYPES: DETECTED_TYPES } = require('../../config/document-types');
 
 const FIELD_NAMES = Object.freeze(['fullName', 'facultyNumber', 'specialty', 'yearOfStudy']);
-const DETECTED_TYPES = Object.freeze(['student_certificate', 'placement_order', 'placement_form', 'address_registration', 'medical', 'unknown']);
-
-function requireCertificate(documentType) {
-  if (documentType !== 'student_certificate') {
-    throw new ApiError(422, 'unsupported_document_type', 'This document type cannot be processed.');
-  }
-}
 
 function certificateSchema() {
   return {
@@ -43,28 +36,4 @@ const SYSTEM_PROMPT = [
   'Return only the JSON object required by the schema, without Markdown or explanatory text.',
 ].join(' ');
 
-function buildVisionRequest(prepared, documentType, config) {
-  requireCertificate(documentType);
-  if (prepared?.status !== 'prepared' || !Array.isArray(prepared.pages) || !prepared.pages.length
-    || prepared.pages.length > config.limits.maxPdfPages
-    || !prepared.pages.every((page) => page && page.mimeType === 'image/png' && typeof page.contentBase64 === 'string' && page.contentBase64.length)) {
-    throw new ApiError(500, 'internal_error', 'Prepared image pages are required for extraction.');
-  }
-  const payload = {
-    model: config.ai.model,
-    store: false,
-    max_completion_tokens: config.ai.maxOutputTokens,
-    response_format: { type: 'json_schema', json_schema: { name: 'student_certificate_extraction', strict: true, schema: certificateSchema() } },
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: [
-        { type: 'text', text: 'Extract the certificate fields from these pages, in the supplied page order.' },
-        ...prepared.pages.map((page) => ({ type: 'image_url', image_url: { url: `data:image/png;base64,${page.contentBase64}`, detail: config.ai.imageDetail } })),
-      ] },
-    ],
-  };
-  if (config.ai.temperature !== undefined) payload.temperature = config.ai.temperature;
-  return payload;
-}
-
-module.exports = { FIELD_NAMES, DETECTED_TYPES, certificateSchema, requireCertificate, buildVisionRequest };
+module.exports = { FIELD_NAMES, DETECTED_TYPES, certificateSchema, SYSTEM_PROMPT };

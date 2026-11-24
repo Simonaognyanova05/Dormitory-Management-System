@@ -1,7 +1,7 @@
 {
   "version": "1.0.0-draft",
   "synthetic": true,
-  "description": "Synthetic raw-candidate fixtures: certificate normalized fields/issues are tested; placement-order cases are planned for later support. Source snippets are not PDF/image files, and rawFields/uncertainFields are not accepted public API or provider payloads.",
+  "description": "Synthetic raw-candidate fixtures for certificate and placement-order normalization/review behavior. Source snippets are not PDF/image files, and rawFields/uncertainFields are not accepted public API or provider payloads.",
   "cases": [
     {
       "id": "certificate_complete",

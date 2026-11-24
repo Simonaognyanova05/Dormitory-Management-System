@@ -2,6 +2,8 @@
 
 Task 10 adds a repeatable **certificate-only** evaluation runner, a generated Bulgarian dataset, and JSON/Markdown reports. It reuses the actual admission validators and Python → AI → field-validation pipeline.
 
+The service now also supports placement orders, but this early evaluator intentionally still rejects order manifests. Mixed-profile scoring is a later extension; see [PLACEMENT_ORDERS.md](PLACEMENT_ORDERS.md) for order-specific live checks and generated source files.
+
 **Current evidence:** the 12-document generated corpus passes file/annotation validation, and the evaluator is covered by deterministic tests. A real-provider recognition run has **not** been performed yet. No measured OCR accuracy or live-provider latency is claimed here.
 
 ## 1. Generate the Initial Corpus

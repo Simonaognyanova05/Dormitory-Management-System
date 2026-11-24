@@ -1,6 +1,6 @@
 # Document Processing Layer
 
-`process-document.js` checks real-provider configuration, runs Python preparation, sends the prepared pages to the selected [vision client](../ai/README.md), and builds the reviewable HTTP response. Certificate values are normalized and semantically validated before completed/partial classification. Mock mode is explicit and always remains partial with `mock_result`. Completed format checks do not approve an application or replace human confirmation.
+`process-document.js` validates the enabled profile before processing, checks provider configuration, prepares pages and calls the selected [vision client](../ai/README.md). Certificate and order values use independent schemas/prompts/semantic validators before completed/partial classification. Mock mode is explicit and always partial with `mock_result`. Completed format checks do not approve applications, allocate rooms or replace human confirmation.
 
 `python-preprocessor.js` starts [python/preprocess.py](../../../python/preprocess.py) with `child_process.spawn()` and separate arguments, from the repository root, with `shell: false`. A configured relative Python path is resolved from that root. The original bytes go through stdin; the script receives the configured input limits and an explicit 2000-pixel output-side limit. Each request owns its child process and buffers.
 

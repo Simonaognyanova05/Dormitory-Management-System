@@ -6,7 +6,7 @@
 
 These are implementation profiles, not eligibility or admission rules. The faculty-number format, study-year range, phone rules, and optional-document fields below are working assumptions based on the architecture document; institution-specific confirmation is still pending.
 
-**Implementation status:** the certificate profile has provider-schema checks, NFC/whitespace normalization, semantic field validation, and completed/partial classification. Mock values remain partial with `mock_result`; type mismatches and field issues also require review. Placement-order and optional-profile rules below are still specifications for later tasks. See [certificate-fields.js](src/validators/certificate-fields.js) and [AI client details](src/services/ai/README.md).
+**Implementation status:** certificate and placement-order profiles have separate provider schemas/prompts, NFC/whitespace normalization, semantic validators, and completed/partial classification. Mock values remain partial with `mock_result`; type mismatches and field issues also require review. Optional form/address profiles remain specifications for later tasks. See [certificate-fields.js](src/validators/certificate-fields.js), [placement-order-fields.js](src/validators/placement-order-fields.js), and [AI client details](src/services/ai/README.md).
 
 ## 1. Profile Registry
 
@@ -54,7 +54,7 @@ Apply these rules to extracted candidates, not to the uploaded bytes or the call
 
 Calendar rules, character classes, and study-year checks are **semantic validators**. The OpenAPI schemas describe the response's structural types and allow invalid candidates in partial results; they do not replace these checks.
 
-The certificate normalizer accepts defensive raw candidates for deterministic field tests. The live provider contract remains stricter: for example, numeric faculty IDs or Roman strings in the provider's integer-only year slot violate its JSON Schema and are rejected before normalization. Missing keys, extra properties, or wrong provider types remain structural `provider_bad_response` errors. Do not confuse raw-candidate fixtures with accepted provider/API payloads.
+The normalizers accept defensive raw candidates for deterministic field tests. The live provider contract remains stricter: numeric identifiers (including room numbers) or Roman strings in the certificate's integer-only year slot violate the selected JSON Schema and are rejected before normalization. Missing keys, extra properties, another profile's keys, or wrong provider types remain structural `provider_bad_response` errors. Do not confuse raw-candidate fixtures with accepted provider/API payloads.
 
 ### Response Classification
 
@@ -98,6 +98,8 @@ For example, `"3.11.2026 г."` becomes `"2026-11-03"`; `"31.02.2026"` remains un
 
 The monolith matches dormitories and rooms to database records. The OCR service must not create placements, assess room capacity, or replace textual identifiers with guessed database IDs. A multi-student order with no unambiguous target must produce review issues rather than selecting an arbitrary row.
 
+The order profile's prompt asks for uncertainty/null values in that multi-student case because the API has no target-student selector. The server preserves the model's flags; detection of every real table layout still needs live validation. [PLACEMENT_ORDERS.md](PLACEMENT_ORDERS.md) provides a generated Bulgarian source, Postman commands and mock output.
+
 ## 6. Optional Profiles
 
 These fields follow the architecture's proposal. They are documented for consistency with the API but still require confirmation before implementation.
@@ -135,7 +137,7 @@ Do not infer missing address values from a postcode or decide eligibility based 
 | `placement_order_invalid_date` | Retain an impossible date with `invalid_format`. |
 | `medical_declared_rejected` | Reject based on the declared type, without source processing or an AI call. |
 
-`rawFields` and `uncertainFields` are raw normalizer inputs, not an AI-provider payload or an API request. [Certificate tests](tests/certificate-fields.test.js) verify the six certificate cases' exact normalized fields and issues. Placement-order examples remain for task 12. Source snippets are plain text, not PDF/image fixtures; none of these deterministic checks counts toward the 30-document recognition benchmark.
+`rawFields` and `uncertainFields` are raw normalizer inputs, not an AI-provider payload or an API request. [Certificate tests](tests/certificate-fields.test.js) verify the six certificate cases' exact normalized fields/issues; [order tests](tests/placement-order.test.js) verify the two order responses. Source snippets are plain text, not PDF/image fixtures; none of these deterministic checks counts toward the 30-document recognition benchmark.
 
 ## 8. Items to Confirm with the Team
 
@@ -144,4 +146,4 @@ Do not infer missing address values from a postcode or decide eligibility based 
 - [ ] Confirm when placement orders enter the workflow and how multi-student orders should identify their target.
 - [ ] Confirm the optional form/address field sets and the phone-number assumptions before implementing them.
 
-The certificate profile is implemented using the documented working assumptions. The team-confirmation items above remain explicitly open rather than being represented as approved university rules.
+Certificate and order profiles are implemented using the documented working assumptions. Team-confirmation items remain open rather than being represented as approved university rules.

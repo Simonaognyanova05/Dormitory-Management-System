@@ -71,3 +71,25 @@ test('the live HTTP pipeline prepares images and returns explicitly marked mock 
   assert.equal(result.status, 'partial');
   assert.equal(result.requiresManualReview, true);
 });
+
+test('real Python processes concurrent certificate/order requests without mixing their profiles', async (t) => {
+  const mockConfig = loadConfig({ ...process.env, SERVICE_TOKEN: 'python-integration-token', PYTHON_COMMAND: config.pythonCommand, AI_PROVIDER: 'mock', OPENAI_API_KEY: '', OPENAI_MODEL: '' });
+  const server = createApp({ config: mockConfig }).listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  t.after(() => new Promise((resolve) => { server.closeAllConnections(); server.close(resolve); }));
+  const png = (await image('white')).toString('base64');
+  const results = await Promise.all(['student_certificate', 'placement_order'].map(async (documentType) => {
+    const reply = await fetch(`http://127.0.0.1:${server.address().port}/api/v1/ocr/process`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Service-Token': 'python-integration-token' },
+      body: JSON.stringify({ documentId: documentType, documentType, file: { mimeType: 'image/png', contentBase64: png } }),
+    });
+    assert.equal(reply.status, 200);
+    return reply.json();
+  }));
+  assert.equal(results[0].documentType, 'student_certificate');
+  assert.equal(results[0].fields.facultyNumber, '001234567');
+  assert.equal(results[1].documentType, 'placement_order');
+  assert.deepEqual(results[1].fields, { orderNumber: 'РД-001', orderDate: '2026-11-03', dormitory: '01', room: '012А' });
+  assert.deepEqual(results[1].warnings, ['mock_result']);
+  assert.equal(results[1].status, 'partial');
+});

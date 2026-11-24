@@ -3,7 +3,7 @@
   "info": {
     "title": "Dormitory OCR Microservice",
     "version": "1.0.0-draft",
-    "description": "Admission, Python preparation, GPT Vision and semantic field validation are implemented for student_certificate. HTTP 200 results are completed only when all values pass checks with no issues/warnings; otherwise partial. Mock data is always partial and marked mock_result. Real-provider acceptance and recognition-quality measurements remain pending."
+    "description": "Student certificates and placement orders have independent schemas/prompts/validators on the shared admission/Python/AI pipeline. HTTP 200 is completed only when field checks pass without issues/warnings; otherwise partial. Mock data is partial and marked. Optional/medical inputs remain excluded. Real-provider layout/accuracy checks remain pending."
   },
   "servers": [{"url": "http://127.0.0.1:3000", "description": "Local development"}],
   "security": [{"ServiceToken": []}],
@@ -12,7 +12,7 @@
       "post": {
         "operationId": "processDocument",
         "summary": "Extract reviewable fields from one document",
-        "description": "Authenticated JSON/Base64 admission, Python preparation and configured OpenAI/mock extraction. Only student_certificate is enabled. Semantic normalization/validation yields completed or partial; mock results are always partial with mock_result. Missing AI credentials return provider_configuration_error before preprocessing. Python and AI share a deadline. Medical/disabled types are rejected before decoding. Use UTF-8 JSON; multipart is not supported.",
+        "description": "Authenticated JSON/Base64 extraction for student_certificate or placement_order. Each request selects its own schema, prompt, field set and semantic validator. Mock is always partial with mock_result. Missing AI credentials fail before preprocessing; Python/AI share a deadline. Medical/optional inputs are excluded before decoding. Use UTF-8 JSON; multipart is not supported.",
         "requestBody": {
           "required": true,
           "content": {
@@ -29,6 +29,13 @@
                       "contentBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC"
                     }
                   }
+                },
+                "orderTransportExample": {
+                  "summary": "Placement-order transport with a blank PNG; use mock or replace with readable order bytes",
+                  "value": {
+                    "documentId": "order-test-001", "documentType": "placement_order",
+                    "file": {"mimeType": "image/png", "contentBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC"}
+                  }
                 }
               }
             }
@@ -36,7 +43,7 @@
         },
         "responses": {
           "200": {
-            "description": "Reviewable extraction after certificate normalization and semantic checks. Completed means no automatic issues/warnings, not administrative approval. Mock data is always partial. Other profile examples describe planned later support.",
+            "description": "Reviewable certificate/order extraction after the selected profile's semantic checks. Completed is not administrative approval or a room allocation. Mock data is always partial. Optional form/address examples describe planned support.",
             "headers": {"X-OCR-AI-Provider": {"description": "Explicitly selected provider; mock never means actual recognition.", "schema": {"type": "string", "enum": ["openai", "mock"]}}},
             "content": {
               "application/json": {
@@ -85,8 +92,16 @@
                     "summary": "Placement identifiers retain leading zeros and separators",
                     "value": {
                       "documentId": "order-001", "documentType": "placement_order", "detectedDocumentType": "placement_order", "status": "completed",
-                      "fields": {"orderNumber": "RD-001", "orderDate": "2026-11-03", "dormitory": "1", "room": "012"},
+                      "fields": {"orderNumber": "РД-001", "orderDate": "2026-11-03", "dormitory": "01", "room": "012А"},
                       "fieldIssues": [], "warnings": [], "requiresManualReview": false
+                    }
+                  },
+                  "mockPlacementOrder": {
+                    "summary": "Fixed synthetic order values, independent of image contents",
+                    "value": {
+                      "documentId": "order-test-001", "documentType": "placement_order", "detectedDocumentType": "placement_order", "status": "partial",
+                      "fields": {"orderNumber": "РД-001", "orderDate": "2026-11-03", "dormitory": "01", "room": "012А"},
+                      "fieldIssues": [], "warnings": ["mock_result"], "requiresManualReview": true
                     }
                   },
                   "typeMismatch": {
@@ -149,7 +164,7 @@
     },
     "schemas": {
       "DocumentId": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$", "description": "Opaque identifier; UUID is allowed but not required."},
-      "DocumentType": {"type": "string", "enum": ["student_certificate", "placement_order", "placement_form", "address_registration"], "description": "Full planned registry. Only student_certificate is currently enabled for admission; other types return unsupported_document_type until enabled."},
+      "DocumentType": {"type": "string", "enum": ["student_certificate", "placement_order", "placement_form", "address_registration"], "description": "student_certificate and placement_order are enabled; optional form/address types return unsupported_document_type until implemented."},
       "ProcessRequest": {
         "type": "object", "additionalProperties": false, "required": ["documentId", "documentType", "file"],
         "properties": {
@@ -229,7 +244,7 @@
         "allOf": [
           {
             "if": {"properties": {"status": {"const": "completed"}}},
-            "then": {"properties": {"requiresManualReview": {"const": false}, "fieldIssues": {"maxItems": 0}, "warnings": {"maxItems": 0}, "fields": {"additionalProperties": {"not": {"type": "null"}, "maxLength": 200}, "properties": {"facultyNumber": {"type": "string", "minLength": 5, "maxLength": 12}, "yearOfStudy": {"type": "integer", "minimum": 1, "maximum": 6}}}}},
+            "then": {"properties": {"requiresManualReview": {"const": false}, "fieldIssues": {"maxItems": 0}, "warnings": {"maxItems": 0}, "fields": {"additionalProperties": {"not": {"type": "null"}, "maxLength": 200}, "properties": {"facultyNumber": {"type": "string", "minLength": 5, "maxLength": 12}, "yearOfStudy": {"type": "integer", "minimum": 1, "maximum": 6}, "orderDate": {"type": "string", "format": "date", "minLength": 10, "maxLength": 10, "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}}}}},
             "else": {"properties": {"requiresManualReview": {"const": true}}, "anyOf": [{"properties": {"fieldIssues": {"minItems": 1}}}, {"properties": {"warnings": {"minItems": 1}}}]}
           }
         ]

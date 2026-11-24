@@ -3,6 +3,7 @@ const { ApiError } = require('../../errors/api-error');
 const { createPythonPreprocessor } = require('./python-preprocessor');
 const { createVisionClient } = require('../ai/client');
 const { buildExtractionResponse } = require('../ai/extraction-response');
+const { getDocumentProfile } = require('../ai/document-profiles');
 
 function createDocumentProcessor(config, { prepare = createPythonPreprocessor(config), client = createVisionClient(config) } = {}) {
   return async (input, { onTiming } = {}) => {
@@ -22,6 +23,7 @@ function createDocumentProcessor(config, { prepare = createPythonPreprocessor(co
     }
     try {
       checkActive();
+      getDocumentProfile(input.documentType);
       client.assertConfigured();
       const prepared = await measure('preprocessingMs', () => prepare(input, { signal: input.signal, deadlineAt }));
       checkActive();

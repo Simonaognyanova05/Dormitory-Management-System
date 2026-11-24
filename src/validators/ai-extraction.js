@@ -1,5 +1,5 @@
 const { ApiError } = require('../errors/api-error');
-const { FIELD_NAMES, DETECTED_TYPES } = require('../services/ai/certificate-profile');
+const { getDocumentProfile, DETECTED_TYPES } = require('../services/ai/document-profiles');
 
 function badAiResponse() {
   return new ApiError(502, 'provider_bad_response', 'AI returned an invalid extraction response.', { retryable: true });
@@ -10,18 +10,19 @@ function exactKeys(value, keys) {
     && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 }
 
-function validateAiExtraction(value) {
+function validateAiExtraction(value, documentType = 'student_certificate') {
+  const { fieldNames, integerFields } = getDocumentProfile(documentType);
   if (!exactKeys(value, ['readable', 'detectedDocumentType', 'fields', 'uncertainFields'])
     || typeof value.readable !== 'boolean' || !DETECTED_TYPES.includes(value.detectedDocumentType)
-    || !exactKeys(value.fields, FIELD_NAMES) || !Array.isArray(value.uncertainFields)
-    || value.uncertainFields.length > FIELD_NAMES.length
-    || !value.uncertainFields.every((field) => FIELD_NAMES.includes(field))
+    || !exactKeys(value.fields, fieldNames) || !Array.isArray(value.uncertainFields)
+    || value.uncertainFields.length > fieldNames.length
+    || !value.uncertainFields.every((field) => fieldNames.includes(field))
     || new Set(value.uncertainFields).size !== value.uncertainFields.length) {
     throw badAiResponse();
   }
-  for (const field of FIELD_NAMES) {
+  for (const field of fieldNames) {
     const candidate = value.fields[field];
-    if (candidate !== null && (field === 'yearOfStudy' ? !Number.isSafeInteger(candidate) : typeof candidate !== 'string')) {
+    if (candidate !== null && (integerFields.includes(field) ? !Number.isSafeInteger(candidate) : typeof candidate !== 'string')) {
       throw badAiResponse();
     }
   }

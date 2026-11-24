@@ -1,5 +1,5 @@
 const { FIELD_NAMES } = require('../services/ai/certificate-profile');
-const { badAiResponse } = require('./ai-extraction');
+const { normalizeProfileFields } = require('./profile-fields');
 
 const LABELS = Object.freeze({ fullName: 'Full name', facultyNumber: 'Faculty number', specialty: 'Specialty', yearOfStudy: 'Year of study' });
 const ROMAN_YEARS = Object.freeze({ I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6 });
@@ -49,23 +49,7 @@ function normalizeField(field, candidate) {
 }
 
 function normalizeCertificateFields(rawFields, uncertainFields = []) {
-  if (!rawFields || typeof rawFields !== 'object' || Array.isArray(rawFields) || !Array.isArray(uncertainFields)) {
-    throw badAiResponse();
-  }
-  const uncertain = new Set(uncertainFields.filter((field) => FIELD_NAMES.includes(field)));
-  const fields = {};
-  const fieldIssues = [];
-  for (const field of FIELD_NAMES) {
-    // Only own profile keys are considered; never copy extra/inherited personal data.
-    const candidate = Object.hasOwn(rawFields, field) ? rawFields[field] : undefined;
-    const normalized = normalizeField(field, candidate);
-    fields[field] = normalized.value;
-    if (normalized.code) fieldIssues.push({ field, code: normalized.code, message: normalized.message });
-    if (uncertain.has(field)) {
-      fieldIssues.push({ field, code: 'uncertain', message: `${LABELS[field]} could not be read reliably. Check the original.` });
-    }
-  }
-  return { fields, fieldIssues };
+  return normalizeProfileFields(rawFields, uncertainFields, FIELD_NAMES, LABELS, normalizeField);
 }
 
 module.exports = { normalizeCertificateFields };

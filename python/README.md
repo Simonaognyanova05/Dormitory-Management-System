@@ -43,6 +43,8 @@ Existing demo files are not overwritten. Choose a different folder for another s
 
 For task 10, [generate_benchmark_dataset.py](generate_benchmark_dataset.py) creates a separate 12-document **Bulgarian** corpus with distinct ground-truth values, including absent fields and multi-page/image-only PDFs. Its bundled font supports Cyrillic without a system-font dependency. See [EVALUATION.md](../EVALUATION.md) for generation, annotation and measurement commands; these files are not the same as the eight English preprocessing demos.
 
+For placement orders, run `.\.venv\Scripts\python.exe python/generate_order_demo.py` from the repository root. It creates Bulgarian PDF/PNG/JPG versions plus expected order fields in `tmp/order-demo/`; the order and accommodation-start dates deliberately differ. See [PLACEMENT_ORDERS.md](../PLACEMENT_ORDERS.md).
+
 ## Prepare a File and Inspect the Result
 
 ```powershell

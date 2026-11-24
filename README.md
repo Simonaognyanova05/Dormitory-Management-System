@@ -6,11 +6,11 @@ This branch contains the OCR microservice work for the student dormitory managem
 
 ## Current Status
 
-The service implements `GET /health` and authenticated request/file validation for `POST /api/v1/ocr/process`. Validation currently enables `student_certificate` with PDF/JPG/PNG input. Other document types are enabled in later implementation steps.
+The service implements `GET /health` and authenticated extraction at `POST /api/v1/ocr/process` for **`student_certificate`** and **`placement_order`**, with PDF/JPG/PNG input. Medical and optional document types remain excluded.
 
 Node.js invokes Python for valid requests, receives prepared PNG pages, and validates their metadata and decoded content. Each request has an isolated child process, bounded output, a processing deadline, and cancellation on client disconnect. No temporary files are written by the HTTP pipeline.
 
-GPT Vision extraction and semantic field validation are implemented for the certificate profile, with an explicitly selected mock mode. Successful requests return HTTP **200**: `completed` when all fields pass validation with no issues/warnings, or `partial` when manual attention is needed. Mock responses always carry `mock_result` and remain `partial`; they never represent actual recognition.
+GPT Vision schemas, prompts and semantic validators are selected independently per profile, with an explicitly selected mock mode. Successful requests return HTTP **200**: `completed` when all fields pass validation with no issues/warnings, or `partial` when manual attention is needed. Mock responses always carry `mock_result` and remain `partial`; they never represent actual recognition.
 
 The real HTTP adapter was tested against local provider fixtures; a real-provider smoke test and measured extraction quality remain pending a configured key/model and sample documents.
 
@@ -121,7 +121,17 @@ For this live check, use anonymized certificate layouts or forms filled with kno
 
 **A valid format is not proof of correct recognition.** Even a `completed` result still requires user confirmation against the original in the main application; this service does not approve applications. Field problems are returned as HTTP 200 partial data, allowing manual entry without another AI request.
 
-See [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md) for the working rules. Placement-order and optional-document semantics remain for their later implementation steps. Structural provider-schema errors still return `provider_bad_response`; defensive raw-value tests do not relax that schema.
+See [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md) for certificate rules and [PLACEMENT_ORDERS.md](PLACEMENT_ORDERS.md) for order dates/identifiers. Optional-document semantics remain for later implementation. Structural provider-schema errors still return `provider_bad_response`; defensive raw-value tests do not relax that schema.
+
+### Placement Orders
+
+Use **`documentType: "placement_order"`** on the same endpoint. Its field set is `orderNumber`, `orderDate`, `dormitory`, `room`. Valid order dates normalize to ISO; impossible dates are retained with review issues. Identifiers stay strings with leading zeros and original suffixes.
+
+```powershell
+.\.venv\Scripts\python.exe python/generate_order_demo.py
+```
+
+The generated Bulgarian PDF/PNG/JPG and expected values are in `tmp/order-demo/`. Follow **[PLACEMENT_ORDERS.md](PLACEMENT_ORDERS.md)** for a full Postman request, mock response, supported date formats and multi-student ambiguity handling. Mock mode has separate fixed order values and is always marked partial. Matching dormitory/room text to actual records remains the monolith's job.
 
 | Test change | Expected response |
 | --- | --- |
@@ -260,7 +270,7 @@ src/
   middleware/                  # Service authentication and error responses
   services/document-processing/ # Python → AI orchestration and shared deadline
   services/ai/                 # GPT client, strict schema, mock and response mapping
-  validators/                  # Request/file/PNG/model-shape and certificate-field checks
+  validators/                  # Request/file/PNG/model-shape and per-profile field checks
   evaluation/                 # Dataset validation, scoring and measurement reports
 scripts/
   check-python.js              # Actual Node.js → Python smoke check
@@ -272,6 +282,7 @@ python/
   preprocess.py                # Standalone CLI/raw-stdin entry point
   generate_demo_documents.py   # Synthetic manual-test inputs
   generate_benchmark_dataset.py # 12 Bulgarian samples and canonical ground truth
+  generate_order_demo.py       # Bulgarian order PDF/PNG/JPG and expected fields
   tests/test_preprocessing.py  # Rendering, geometry, quality and CLI checks
   README.md                    # Python setup and preprocessing boundary
 examples/
@@ -283,6 +294,7 @@ tests/
   ai-extraction.test.js        # Provider protocol, errors, deadlines, mock and HTTP extraction
   reliability.test.js          # Cooldowns, independent deadlines, cleanup and recovery
   certificate-fields.test.js   # Golden certificate cases and semantic/Unicode/status checks
+  placement-order.test.js      # Order profile/schema/date/status and HTTP checks
   evaluation.test.js           # Scoring, failure coverage, CLI reports and timing checks
   fixtures/encrypted-pdf.json   # Synthetic password-protected PDF
 ```

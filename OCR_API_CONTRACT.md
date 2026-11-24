@@ -4,9 +4,9 @@
 **Status:** proposed contract for the OCR branch; acceptance by the monolith developer is pending.  
 **Machine-readable definition:** [openapi.json](openapi.json), importable into Postman.
 
-This document defines the extraction API. Authentication, file admission, Python preparation, GPT Vision integration and semantic certificate-field validation are implemented for `student_certificate`. Successful extraction returns HTTP 200 with `completed` or `partial` according to field issues and warnings. Explicit mock mode always returns partial, labeled synthetic data. Real-provider acceptance/accuracy checks remain pending. Python startup failures are `503 processing_not_configured`; missing AI credentials/model are `503 provider_configuration_error`. Other document types remain disabled and return `422 unsupported_document_type`.
+This document defines extraction for `student_certificate` and `placement_order`, each with its own schema, prompt and semantic validator. Admission, Python and transport/error handling are shared. Successful extraction returns HTTP 200 with completed/partial classification; explicit mock mode always returns partial synthetic data. Real-provider layout/accuracy checks remain pending. Python startup failures are `503 processing_not_configured`; missing AI configuration is `503 provider_configuration_error`. Optional/medical types remain excluded.
 
-Document-specific semantic rules are defined in [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md); [AI client documentation](src/services/ai/README.md) describes provider configuration and the internal schema.
+Semantic rules are in [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md); [AI documentation](src/services/ai/README.md) describes profile-specific internal schemas. [PLACEMENT_ORDERS.md](PLACEMENT_ORDERS.md) includes order examples, calendar rules and the monolith's record-matching responsibilities.
 
 ## 1. Integration Decisions
 
@@ -96,7 +96,7 @@ For JPG/PNG, use the matching MIME type. The original filename and filesystem pa
 
 Both fully extracted and partial results return **HTTP 200**. A partial result is useful data, not a transport failure.
 
-The certificate response is built after structural provider checks, normalization and semantic field validation. `completed` requires present, valid, unambiguous values, matching document type and no warnings; otherwise return `partial`. See [README.md](README.md) for mock examples and real-provider setup. Success responses include `X-OCR-AI-Provider: openai` or `mock`.
+Responses use the requested profile after structural checks, normalization and semantic validation. `completed` requires present, valid, unambiguous values, matching type and no warnings; otherwise return `partial`. A different detected type never switches field sets silently. Success responses include `X-OCR-AI-Provider: openai` or `mock`.
 
 Every successful or partial response includes all keys for the requested document profile. Text fields are strings or `null`; `yearOfStudy` is an integer or `null`. IDs and room/order/faculty numbers remain strings so leading zeros and separators are preserved. `orderDate` is normalized to `YYYY-MM-DD` when valid; exact field-format and normalization rules are defined in [DOCUMENT_PROFILES.md](DOCUMENT_PROFILES.md). Required response keys are not the same as required application values: missing source fields remain reviewable partial results, while the monolith controls submission requirements.
 

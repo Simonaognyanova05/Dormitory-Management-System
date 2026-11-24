@@ -7,6 +7,7 @@ const { createApp } = require('../src/app');
 const { loadConfig } = require('../src/config/env');
 const { validateProcessRequest } = require('../src/validators/process-request');
 const openapi = require('../openapi.json');
+const { getDocumentProfile } = require('../src/services/ai/document-profiles');
 
 const TOKEN = 'synthetic-test-service-token';
 const fixtures = {};
@@ -38,11 +39,11 @@ async function startApp(t, { env = {}, useDefaultProcessor = false } = {}) {
     // Test-only stand-in at the processing boundary. This performs no OCR.
     options.processDocument = async (input) => {
       calls.push(input);
-      const fields = { fullName: null, facultyNumber: null, specialty: null, yearOfStudy: null };
+      const fields = Object.fromEntries(getDocumentProfile(input.documentType).fieldNames.map((field) => [field, null]));
       return {
         documentId: input.documentId,
         documentType: input.documentType,
-        detectedDocumentType: 'student_certificate',
+        detectedDocumentType: input.documentType,
         status: 'partial',
         fields,
         fieldIssues: Object.keys(fields).map((field) => ({ field, code: 'missing', message: 'Test boundary only.' })),
@@ -139,10 +140,20 @@ test('validates opaque identifiers without changing them', async (t) => {
 
 test('rejects medical, unknown, legacy and not-yet-enabled types before file decoding', async (t) => {
   const app = await startApp(t);
-  for (const documentType of ['medical', 'unknown', 'student_status_certificate', 'placement_order', 'placement_form', 'address_registration']) {
+  for (const documentType of ['medical', 'unknown', 'student_status_certificate', 'placement_form', 'address_registration']) {
     await expectError(await app.post({ ...requestBody(), documentType, file: null }), 422, 'unsupported_document_type');
   }
   assert.equal(app.calls.length, 0);
+});
+
+test('placement orders are admitted with their own field set', async (t) => {
+  const app = await startApp(t);
+  const response = await app.post({ ...requestBody(fixtures.pdf1, 'application/pdf'), documentType: 'placement_order' });
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.equal(result.documentType, 'placement_order');
+  assert.deepEqual(Object.keys(result.fields), ['orderNumber', 'orderDate', 'dormitory', 'room']);
+  assert.equal(app.calls[0].documentType, 'placement_order');
 });
 
 test('rejects noncanonical Base64 including bad padding bits and data URL prefixes', async (t) => {

@@ -12,4 +12,6 @@ Configuration validation lives in `src/config/env.js`; service authentication an
 
 `certificate-fields.js` implements the certificate's NFC/whitespace normalization, faculty-number and study-year rules, code-point limits, and missing/invalid/uncertain issues. It copies only own profile keys, never guesses lost leading zeros, and retains type-correct invalid values for review. Its defensive raw-candidate tests do not weaken the provider schema. The response adapter classifies the normalized result as completed only when no issues/warnings remain; mock results are always partial.
 
+`placement-order-fields.js` applies the same text/identifier rules and strict date-only parsing for orders. Dates use explicit ISO/day-first grammars and Gregorian leap rules rather than `Date.parse`, timezone conversions or automatic rollover. `profile-fields.js` supplies shared own-key selection and review-issue handling without mixing the profiles' fields.
+
 `prepared-document.js` validates the Python result before it can reach the AI client: exact keys and types, page count/order, dimensions/transformation metadata, canonical Base64 and decoded RGB PNG content. Malformed child output becomes a fixed internal error rather than being treated as a successful preparation.
